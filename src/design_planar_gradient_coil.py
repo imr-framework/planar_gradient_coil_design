@@ -19,7 +19,7 @@ import time
 grad_dir = 'x'
 radius =0.5 * 6 * 0.0254 # m
 current = 10 # A
-mesh = 4 # number of points in the mesh 
+mesh = 40 # number of points in the mesh 
 target_field = 1 # get_field() # T
 wire_thickness = 1.3 * 1e-3 # m
 wire_spacing = 0.5 * wire_thickness # m
