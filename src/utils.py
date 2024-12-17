@@ -240,7 +240,7 @@ def get_surface_current_density(triangles, nodes, psi,p=2):
     return triangles_used, triangle_ji, triangle_area
 
 def cost_fn(B_grad, B_target, coil_resistance, coil_current, case = 'vector_BEM',
-            p=2,  alpha = 0.1, beta = 0.1, weight = 1):
+            p=2,  alpha = 0.1, beta = 0.1, weight = 1000):
     ''' Compute the cost function for the optimization problem. '''
     gammabar = 42.58e6
     if case == 'target_field':

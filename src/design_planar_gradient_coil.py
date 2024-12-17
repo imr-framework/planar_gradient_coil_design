@@ -25,9 +25,10 @@ wire_thickness = 1.3 * 1e-3 # m
 wire_spacing = 0.5 * wire_thickness # m
 viewing  = True
 heights = [-40 * 1e-3, 40 * 1e-3]  # m
+symmetry = True
 # Make an instance of the planar gradient coil class
 tenacity_grad_coil = PlanarGradientCoil(grad_dir = grad_dir, radius=radius, heights = heights, current=current, mesh=mesh, target_field=target_field, 
-                            wire_thickness=wire_thickness, wire_spacing=wire_spacing)
+                            wire_thickness=wire_thickness, wire_spacing=wire_spacing, symmetry = symmetry)
                             
 # --------------------------------------------------------------
 # Set up the target magnetic field
@@ -37,7 +38,6 @@ dsv = 31 * 1e-3 # m
 res = 2 * 1e-3 # m
 viewing = True
 dsv_sensors, pos, Bz_target = create_magpy_sensors(grad_dir=grad_dir, grad_max=grad_max, dsv=dsv, res=res, viewing=viewing, symmetry=True)
-print(Fore.GREEN + 'Done creating position sensors' + Style.RESET_ALL)
 
 #---------------------------------------------------------------
 # Optimize coil design 
@@ -47,7 +47,7 @@ opt_library = 'pymoo' # 'pymoo' or 'cvxpy'
 if opt_library == 'pymoo':
     #---------------------------------------------------------------
     # Use pymoo to optimize the coil design
-    pop_size = 10
+    pop_size = 2 * tenacity_grad_coil.triangles.shape[0]
     algorithm = MixedVariableGA(pop_size=pop_size, survival=RankAndCrowdingSurvival())
     tic = time.time()
     res_psi = minimize(tenacity_grad_coil_optimize,
@@ -66,7 +66,7 @@ elif opt_library == 'cvxpy':
 # visualize_gradient_coil(biplanar_coil_pattern) - check for whole field 
 
 tenacity_grad_coil.load(psi, len(psi), pos, dsv_sensors, viewing = True)
-dsv_sensors_full, pos_full, Bz_target = create_magpy_sensors(grad_dir=grad_dir, grad_max=grad_max, dsv=dsv, res=res, viewing=False, symmetry=False)
+dsv_sensors_full, pos_full, _ = create_magpy_sensors(grad_dir=grad_dir, grad_max=grad_max, dsv=dsv, res=res, viewing=False, symmetry=False)
 tenacity_grad_coil.load(psi, len(psi), pos_full, dsv_sensors_full, viewing = True)
 print(Fore.GREEN + 'Optimized coil pattern loaded ...' + Style.RESET_ALL)
 

@@ -10,7 +10,7 @@ class PlanarGradientCoil:
     ''' This class describes the geometry and properties of a planar gradient coil. '''
     
     def __init__(self, grad_dir, radius,  mesh, target_field, heights, current =10,
-                 wire_thickness=0.1, wire_spacing=0.1, resistivity=1.68e-8):
+                 wire_thickness=0.1, wire_spacing=0.1, resistivity=1.68e-8, symmetry=True):
         ''' Initialize the planar gradient coil. '''
         self.grad_dir = grad_dir
         self.radius = radius
@@ -25,7 +25,9 @@ class PlanarGradientCoil:
         self.heights = heights
         self.upper_coil_plate_height = heights[0]
         self.lower_coil_plate_height = heights[1]
+        self.symmetry = symmetry
         self.make_coil_plates()
+        
         
     def get_triangles(self, viewing=False):
         ''' Get triangles from the mesh of a particular circular region. '''
@@ -41,6 +43,10 @@ class PlanarGradientCoil:
         x = x.flatten()
         y = y.flatten()
 
+        if self.symmetry is True:
+            x, y = self.do_symmetry(x, y)
+
+
         # Create the Delaunay triangulation
         triang = tri.Triangulation(x, y)
 
@@ -52,6 +58,8 @@ class PlanarGradientCoil:
         triangles = triang.triangles
         print(Fore.GREEN + 'Number of triangles: ', triangles.shape[0], Style.RESET_ALL)
         
+        
+        
         debug = False
         if debug is True:
             print(Fore.GREEN + 'Triangles: ', triangles[0, :], Style.RESET_ALL)
@@ -59,6 +67,7 @@ class PlanarGradientCoil:
             psi = np.random.random(triangles.shape[0])
             ji = get_surface_current_density(triangles[0, :], nodes, psi, p=2)
         
+            
         # Display the triangles
         if viewing is True:
             plt.triplot(triang, 'go-', lw=1.0)
@@ -71,25 +80,45 @@ class PlanarGradientCoil:
         
         return triangles, nodes
     
-    def do_symmetry(self):
+    def do_symmetry(self, x, y):
         ''' Exploit symmetry of the planar gradient coil to reduce the coil nodes. '''
         
-        # for i in range(self.triangles.shape[0]):
-        #     triangle = self.triangles[i, :]
-        #     node = self.nodes[triangle, :]
-        #     x, y = node[:, 0], node[:, 1]
+        if self.grad_dir == 'x':
+            mask = y >= 0
+            x = x[mask]
+            y = y[mask]
             
-        #     if grad_dir == 'x':
-                
+        elif self.grad_dir == 'y':
+            mask = x >= 0
+            x = x[mask]
+            y = y[mask]
             
-        #     x_sym = -x
-        #     y_sym = y
-        #     node_sym = np.vstack((x_sym, y_sym)).T
-        #     self.triangles = np.vstack((self.triangles, triangle))
-        #     self.nodes = np.vstack((self.nodes, node_sym))
+        return x, y
+        # filtered_triangles = []
+        # if self.grad_dir == 'x':
+        #     for triangle in self.triangles:
+        #         nodes = self.nodes[triangle]
+        #         if np.all(nodes[:, 1] > 0):
+        #             filtered_triangles.append(triangle)
+
+            
+        # elif self.grad_dir == 'y':
+        #     for triangle in self.triangles:
+        #         nodes = self.nodes[triangle]
+        #         if np.all(nodes[:, 0] > 0):
+        #             filtered_triangles.append(triangle)
+                        
+        # elif self.grad_dir == 'z':
+        #     for triangle in self.triangles:
+        #         nodes = self.nodes[triangle]
+        #         if np.all(nodes[:, 0] > 0) and np.all(nodes[:, 1] > 0):
+        #             filtered_triangles.append(triangle)
+                        
+                        
+        # self.triangles = np.array(filtered_triangles)
         
+        # return self.triangles, self.nodes
         
-        pass
         
     def make_coil_plates(self):
         ''' Make the coil plates for the planar gradient coil. '''
