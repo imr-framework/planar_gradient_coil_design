@@ -30,9 +30,10 @@ class gradient_problem(ElementwiseProblem):
         self.beta = beta
         self.B_tol = B_tol
         self.num_triangles_total = num_triangles_total
-        self.psi = prepare_vars(num_triangles_total, types = ['Choice'], 
-                              options = [list(np.r_[1, 0, -1])])
+        self.psi = prepare_vars(num_triangles_total, types = ['Real'], 
+                              options = [-1, 1])
         super().__init__(vars=self.psi, n_ieq_constr=0, n_obj=1, **kwargs)
+       
         
        
     

@@ -276,10 +276,10 @@ def compute_constraints(B_grad, B_target, B_tol, current, wire_thickness, J_max,
          return g1, g2
               
 
-def prepare_vars(num_triangles, types = ['Choice'], options = [[0]]):
+def prepare_vars(num_triangles, types = ['Real'], options = [[0]]):
     vars = dict()
     for var in range(num_triangles):
-        vars[f"x{var:02}"] = Choice(options=options[0])
+        vars[f"x{var:02}"] = Real(bounds=(options[0], options[1]))
     return vars
 
 
