@@ -25,10 +25,10 @@ import time
 grad_dir = 'x'
 radius =  0.5 * 6 * 0.0254 # m
 current = 10 # A
-mesh = 6 # number of points in the mesh 
+mesh = 50 # number of points in the mesh 
 target_field = 1 # get_field() # T
-wire_thickness = 1.3 * 1e-3 # m
-wire_spacing = 1 * wire_thickness # m
+wire_thickness = 2.6 * 1e-3 # m
+wire_spacing = 2 * wire_thickness # m
 viewing  = True
 heights = [-40 * 1e-3, 40 * 1e-3]  # m
 symmetry = False
@@ -58,7 +58,7 @@ if num_objectives == 1:
     alpha[1] = 0.1 # minimize max Bz difference 
     alpha[2] = 0.1 # minimize  resistance
     alpha[3] = 0.1 # minimize current
-    alpha[4] = 0.1 # ensure smoothness or wire patterns and avoid overlaps
+    alpha[4] = 0.5 # ensure smoothness or wire patterns and avoid overlaps
 order = 2 # lp -> high fidelity for now
 iterations = 1 # number of iterations
 tenacity_grad_coil_optimize = gradient_problem(grad_coil=tenacity_grad_coil, sensors=dsv_sensors, pos=pos,

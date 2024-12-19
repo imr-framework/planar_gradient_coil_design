@@ -147,9 +147,9 @@ class PlanarGradientCoil:
                                                                 #   height = self.upper_coil_plate_height, current =self.current, w=self.wire_thickness, g=self.wire_spacing, psi=psi, viewing=False)
         
         self.upper_coil_wire_pattern = make_wire_patterns_contours(upper_plate_triangles, self.upper_coil_plate_nodes_3D, psi=psi[0:N_each_plate], 
-                                                                   current=self.current, viewing=False)
+                                                                   current=self.current, wire_width=self.wire_thickness, wire_gap=self.wire_spacing, viewing=False)
         self.lower_coil_wire_pattern = make_wire_patterns_contours(lower_plate_triangles, self.lower_coil_plate_nodes_3D, psi=psi[N_each_plate:],
-                                                                   current = self.current, viewing=False)
+                                                                   current = self.current, wire_width=self.wire_thickness, wire_gap=self.wire_spacing,viewing=False)
         
         max_ji_upper = np.max(upper_plate_ji)
         # self.lower_coil_wire_pattern = make_wire_patterns(lower_plate_triangles,lower_plate_ji, self.lower_coil_plate_nodes_3D,
@@ -282,16 +282,20 @@ class PlanarGradientCoil:
             wire_data = list(reader)
 
         currents = np.array([float(row[0]) for row in wire_data[1:]])
-        coordinates = np.array([[float(value) for value in row[1:]] for row in wire_data[1:]])
+        coordinates = np.round(np.array([[float(value) for value in row[1:]] for row in wire_data[1:]]), decimals=2) # 10um precision
 
         
         # Add wire spacing to z coordinate of repeated coordinates
         unique_coords = []
         for coord in coordinates:
             while any(np.allclose(coord, unique_coord) for unique_coord in unique_coords):
-                coord[2] += self.wire_spacing
+                coord[2] += self.wire_spacing * 1e3 # convert to mm because the csv file in Solidworks is in mm
             unique_coords.append(coord)
         coordinates = np.array(unique_coords)
+        
+        # check if there are any repetitions left - must be none
+        if len(coordinates) != len(np.unique(coordinates, axis=0)):
+            raise ValueError("There are still repeated coordinates after adjustment.")
         
     
         # Separate positive and negative current wires
@@ -306,12 +310,10 @@ class PlanarGradientCoil:
 
         with open(positive_fname, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['x', 'y', 'z'])
             writer.writerows(positive_wires)
             
         with open(negative_fname, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['x', 'y', 'z'])
             writer.writerows(negative_wires)
         # 
         
