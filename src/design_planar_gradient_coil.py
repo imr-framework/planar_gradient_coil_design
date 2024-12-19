@@ -18,7 +18,7 @@ from pymoo.optimize import minimize
 from pymoo.core.population import Population
 from pymoo.core.evaluator import Evaluator
 import cvxpy as cp
-import time
+import time 
 
 # --------------------------------------------------------------
 # Setup geometry for a planar gradient coil
@@ -60,7 +60,7 @@ if num_objectives == 1:
     alpha[3] = 0.1 # minimize current
     alpha[4] = 0.1 # ensure smoothness or wire patterns and avoid overlaps
 order = 2 # lp -> high fidelity for now
-    
+iterations = 1 # number of iterations
 tenacity_grad_coil_optimize = gradient_problem(grad_coil=tenacity_grad_coil, sensors=dsv_sensors, pos=pos,
                                                num_triangles_total=tenacity_grad_coil.num_triangles_total, target_field=Bz_target,
                                                order=order, alpha=alpha, beta=0.5, B_tol = 5, n_obj=num_objectives, n_constr=num_constraints)
@@ -73,7 +73,7 @@ if opt_library == 'pymoo':
     algorithm = MixedVariableGA(pop_size=pop_size, survival=RankAndCrowdingSurvival())
     tic = time.time()
     res_psi = minimize(tenacity_grad_coil_optimize,
-                    algorithm, ('n_gen', 10),
+                    algorithm, ('n_gen', iterations),
                     verbose=True)
     toc = time.time()
     print(Fore.YELLOW + 'Wire pattern search ends ...')
@@ -95,7 +95,8 @@ tenacity_grad_coil.view(sensors = dsv_sensors, pos = pos, symmetry=True)
 #---------------------------------------------------------------
 # Save the results to a csv file with coordinates for the positive and negative wires
 print(Fore.YELLOW + 'Saving the optimized wire pattern ...')
-tenacity_grad_coil.save(fname='tenacity_grad_coil.csv')
+fname = 'tenacity_grad_coil_' + tenacity_grad_coil.grad_dir + '.csv'
+tenacity_grad_coil.save(fname=fname)
 
 
 

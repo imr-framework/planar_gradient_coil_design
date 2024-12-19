@@ -217,9 +217,9 @@ def visualize_gradient_coil(biplanar_coil_pattern, save = False, fname_save='coi
                 vertices = np.array(wire_pattern.vertices)
                 if save is True:
                     if wire_pattern.current > 0:
-                        vertices_write.append(np.hstack((np.ones((vertices.shape[0], 1)), vertices)))
+                        vertices_write.append(np.hstack((np.ones((vertices.shape[0], 1)), 1e3 * vertices)))
                     else:
-                        vertices_write.append(np.hstack((-1 * np.ones((vertices.shape[0], 1)), vertices)))
+                        vertices_write.append(np.hstack((-1 * np.ones((vertices.shape[0], 1)),1e3 * vertices)))
                     
                         
                         
