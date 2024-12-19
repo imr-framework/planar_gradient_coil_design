@@ -20,7 +20,8 @@ from colorama import Fore, Style
 
 class gradient_problem(ElementwiseProblem):
    
-    def __init__(self, grad_coil, sensors, pos, num_triangles_total, target_field, order=2, alpha=0.5, beta=0.5, B_tol = 5, **kwargs):
+    def __init__(self, grad_coil, sensors, pos, num_triangles_total, target_field, order=2, 
+                 alpha=[0.5], beta=0.5, B_tol = 5, n_obj=1, n_constr=0, **kwargs):
         self.grad_coil = grad_coil
         self.sensors = sensors
         self.target_field = target_field
@@ -30,27 +31,30 @@ class gradient_problem(ElementwiseProblem):
         self.beta = beta
         self.B_tol = B_tol
         self.num_triangles_total = num_triangles_total
-        self.psi = prepare_vars(num_triangles_total, types = ['Real'], 
+        self.num_nodes_total = grad_coil.num_nodes_total
+        self.psi = prepare_vars(self.num_nodes_total, types = ['Real'], 
                               options = [-1, 1])
-        super().__init__(vars=self.psi, n_ieq_constr=0, n_obj=1, **kwargs)
+        self.n_obj = n_obj
+        self.num_constr = n_constr
+        super().__init__(vars=self.psi, n_ieq_constr=self.num_constr, n_obj=self.n_obj, **kwargs)
        
         
-       
-    
     def _evaluate(self, psi, out, *args, **kwargs):
-        self.biplanar_coil_pattern, self.coil_resistance, self.coil_current, max_ji = self.grad_coil.load(psi, len(self.psi), self.pos, self.sensors, viewing = False)
+        self.biplanar_coil_pattern, self.coil_resistance, self.coil_current, max_ji = self.grad_coil.load(psi, self.grad_coil.num_nodes_total, 
+                                                                                                          self.pos, self.sensors, viewing = False)
         if (len(self.biplanar_coil_pattern)==0):
            self.grad_coil_field = 0
         else:
             self.grad_coil_field= get_magnetic_field(self.biplanar_coil_pattern, self.sensors, axis = 2)
         
         # Minimize range of B and maximize mean
-        f1 = cost_fn(B_grad = self.grad_coil_field, B_target = self.target_field, 
-                     coil_resistance=self.coil_resistance, coil_current=self.coil_current, 
-                     p=self.order, alpha=self.alpha, beta=self.beta, weight=1e3, case='target_field')
-        g1, g2 = compute_constraints(B_grad = self.grad_coil_field, B_target = self.target_field, B_tol = self.B_tol,
-                                     current = self.grad_coil.current, J_max = max_ji, wire_thickness=self.grad_coil.wire_thickness)
-        out["F"] = [f1]
+        if self.n_obj == 1:
+            f = cost_fn(psi = self.grad_coil.psi_array, B_grad = self.grad_coil_field, B_target = self.target_field, 
+                        coil_resistance=self.coil_resistance, coil_current=self.coil_current, 
+                        p=self.order, alpha=self.alpha, beta=self.beta, weight=1e3, case='target_field')
+        # g1, g2 = compute_constraints(B_grad = self.grad_coil_field, B_target = self.target_field, B_tol = self.B_tol,
+        #                              current = self.grad_coil.current, J_max = max_ji, wire_thickness=self.grad_coil.wire_thickness)
+        out["F"] = [f]
         
         # print(Fore.YELLOW + 'Cost function value: ' + str(f1) + Style.RESET_ALL)
         # out["G"] = [g2]

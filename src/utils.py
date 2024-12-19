@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import magpylib as magpy
 from pymoo.core.variable import Real, Integer, Choice, Binary
 from colorama import Fore, Style
+from mpl_toolkits.mplot3d import Axes3D
+
 
 # Design the target magnetic field - Bz
 def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res:float = 2, symmetry = True, viewing = False):
@@ -19,12 +21,10 @@ def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res
         Bz = Bz_max * X / (0.5 * dsv)
         if symmetry is True:
             mask1 = Y < 0 # consider only the positive of the other two dimensions
-            mask2 = Z < 0 
     elif grad_dir == 'y':
         Bz = Bz_max * Y / (0.5 * dsv)
         if symmetry is True:
             mask1 = X < 0 # consider only the positive of the other two dimensions
-            mask2 = Z < 0 
     elif grad_dir == 'z':
         Bz = Bz_max * Z / (0.5 * dsv)
         if symmetry is True:
@@ -37,7 +37,8 @@ def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res
     
     if symmetry is True:
         Bz[mask1] = 0
-        Bz[mask2] = 0
+        if grad_dir == 'z':
+            Bz[mask2] = 0
         
     X = X[Bz!=0]
     Y = Y[Bz!=0]
@@ -58,7 +59,7 @@ def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res
         ax.set_xlabel('X (mm)')
         ax.set_ylabel('Y (mm)')
         ax.set_zlabel('Z (mm)')
-        plt.title('3D Spherical Volume Bz')
+        plt.title('Target Bz')
         plt.colorbar(img)
         plt.show()
     
@@ -75,6 +76,10 @@ def get_surface_current_density_triangle(triangle, nodes, psi, p=2, debug = Fals
     Q = nodes[triangle[1]]
     R = nodes[triangle[2]]
     
+    psi_P = psi[triangle[0]]
+    psi_Q = psi[triangle[1]]
+    psi_R = psi[triangle[2]]
+    
     # Compute the edge lengths
     PQ = np.linalg.norm(P - Q,ord=p, axis=0)
     QR = np.linalg.norm(Q - R,ord=p, axis=0)
@@ -85,10 +90,13 @@ def get_surface_current_density_triangle(triangle, nodes, psi, p=2, debug = Fals
     # Get the direction of ei
     if ei == PQ:
         ei = P - Q
+        psi = psi_R - psi_P
     elif ei == QR:
         ei = Q - R
+        psi = psi_P - psi_Q
     else:
         ei = R - P
+        psi = psi_Q - psi_R
         
     
     # Calculate the semi-perimeter
@@ -100,6 +108,38 @@ def get_surface_current_density_triangle(triangle, nodes, psi, p=2, debug = Fals
     # Compute the surface current density
     surface_current_density = ei * (psi) / (2 * area)
     return surface_current_density, area
+
+def make_wire_patterns_contours(triangles, nodes, psi, current, 
+                                wire_width = 1.4e-3, wire_gap = 0.7e-3, 
+                                viewing = False):
+    planar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
+    
+    x = nodes[:, 0]
+    y = nodes[:, 1]
+    z = nodes[:, 2]
+    
+    contours = psi2contour(x, y, psi, viewing = viewing)
+    
+    for collection, level  in zip(contours.collections, contours.levels):
+        paths = collection.get_paths()
+        # print(Fore.GREEN + f'Level: {level}' + Style.RESET_ALL)
+        current_direction = np.sign(level)
+        for path in paths:
+            vertices = path.vertices
+            vertices_current_intensity = np.array([vertices[:, 0], vertices[:, 1], z[0] * np.ones(vertices[:, 0].shape)]).T
+            vertices_wire_widths = gen_wire_vertices(vertices_current_intensity, level, wire_width, wire_gap)
+            
+            # if len(vertices_wire_widths) > 0:
+            #     for prev_vertex in vertices_wire_widths:
+            #         if np.allclose(prev_vertex[:2], vertices_current_intensity[:, :2], atol=1e-6):
+            #             vertices_current_intensity[:, 2] += wire_gap
+            #             break
+            
+            planar_coil_pattern.add(magpy.current.Polyline(current=current * current_direction, 
+                                                           vertices = vertices_wire_widths))
+    return planar_coil_pattern
+
+
 
 
 # Make wire patterns for the particular triangular mesh
@@ -158,29 +198,40 @@ def make_wire_patterns(triangles, triangles_ji, nodes, height,  w=2e-3, g=1e-3,
         planar_coil_pattern.show(backend='matplotlib', style='wire', style_color='k')
     return planar_coil_pattern
 
-def visualize_gradient_coil(biplanar_coil_pattern):
+def visualize_gradient_coil(biplanar_coil_pattern, save = False, fname_save='coil_design.csv'):
+    ''' Visualize the wire patterns of the planar gradient coil. '''
     ax = plt.figure().add_subplot(111, projection='3d')
+    if save is True:
+        vertices_write = []
     if (len(biplanar_coil_pattern)) > 1: # expects two plates
+
+            
         for plate in range(len(biplanar_coil_pattern)): 
             for wire in range(len(biplanar_coil_pattern.children[plate].children)):
-                wire = biplanar_coil_pattern.children[plate].children[wire]
-                if wire.current > 0:
+                wire_pattern = biplanar_coil_pattern.children[plate].children[wire]
+                if wire_pattern.current > 0:
                     color = 'r'
                 else:
                     color = 'b'
                 
-                vertices = np.array(wire.vertices)
+                vertices = np.array(wire_pattern.vertices)
+                if save is True:
+                    if wire_pattern.current > 0:
+                        vertices_write.append(np.hstack((np.ones((vertices.shape[0], 1)), vertices)))
+                    else:
+                        vertices_write.append(np.hstack((-1 * np.ones((vertices.shape[0], 1)), vertices)))
+                    
+                        
+                        
+                        
                 ax.plot(vertices[:, 0], vertices[:, 1], vertices[:, 2], color=color)
+        if save is True:
+            np.savetxt(fname_save, np.vstack(vertices_write), delimiter=',')
+        plt.xlabel('X (m)')
+        plt.ylabel('Y (m)')
         plt.show()
         
-            # mag_cuboid_trace = mag_collection_template.children[child1].get_trace()
-            # vertices = np.array([mag_cuboid_trace['x'], mag_cuboid_trace['y'], mag_cuboid_trace['z']]).T + cube_magnet.position.T  #cube_magnet.orientation.apply(cube_magnet.position.T)
-    
-
-
-
-
-
+          
 # Compute the resistance of the triangular mesh
 def compute_resistance(j_triangle, area_triangle,  p=2, fact_include = False,
                        resistivity=1.68e-8, current = 10, thickness = 1.6):
@@ -232,22 +283,36 @@ def get_surface_current_density(triangles, nodes, psi,p=2):
     if triangles is not None:
         for i in range(triangles.shape[0]):
         # for triangle, psi_i in triangles, psi:
-            ji, area = get_surface_current_density_triangle(triangles[i, :], nodes, psi[i], p=p)
+            ji, area = get_surface_current_density_triangle(triangles[i, :], nodes, psi, p=p)
             if np.sum(ji) != 0:
                 triangle_ji.append(ji)
                 triangle_area.append(area)
                 triangles_used.append(triangles[i, :])
     return triangles_used, triangle_ji, triangle_area
 
-def cost_fn(B_grad, B_target, coil_resistance, coil_current, case = 'vector_BEM',
-            p=2,  alpha = 0.1, beta = 0.1, weight = 1000):
+def cost_fn(psi, B_grad, B_target, coil_resistance, coil_current, case = 'target_field',
+            p=2,  alpha = [0.1], beta = 0.1, weight = 1):
     ''' Compute the cost function for the optimization problem. '''
     gammabar = 42.58e6
     if case == 'target_field':
-        f1 = np.linalg.norm(B_grad - B_target, ord=p) * weight
-        f2 = np.linalg.norm(B_grad - B_target, ord=np.inf) * weight
-        f = f1 + f2
-        # f = (100 * np.linalg.norm(B_grad - B_target, ord=np.inf))/ (np.linalg.norm(B_target, ord=np.inf)) 
+        # print(Fore.GREEN + ' max B_grad: ', np.max(B_grad), Style.RESET_ALL)
+        f0 = np.linalg.norm(100 * np.divide((B_grad - B_target), B_target), ord=p) * weight # target field method
+        f1 = np.linalg.norm(B_grad - B_target, ord=np.inf) # avoiding spikes
+        f2 = coil_resistance # minimizing resistance
+        f3 = coil_current # minimizing peak current
+        
+        # avoiding overlaps in the wire patterns by enforcing a smooth transition
+        N_plate = int(psi.shape[0] * 0.5)
+        f4 = np.linalg.norm(np.diff(psi[0:N_plate]), ord=p) + np.linalg.norm(np.diff(psi[N_plate:]), ord=p)
+     
+        if alpha.shape[0] > 1:
+            f = (alpha[0] * f0) + (alpha[1] * f1) + (alpha[2] * f2) + (alpha[3] * f3) 
+            + (alpha[4] * f4)
+        else:
+            f = [f0, f1, f2, f3, f4]
+            
+
+            
         
     elif case == 'vector_BEM':
         f1 = alpha * coil_resistance
@@ -299,6 +364,10 @@ def display_scatter_3D(x, y, z, B, center:bool=False, title:str=None, clim_plot 
     
     plt.title(title)
     plt.colorbar(img)
+    plt.xlabel('X (mm)')
+    plt.ylabel('Y (mm)')
+    ax.set_zlabel('Z (mm)')
+    
     # plt.xticks([-16, 0, 16])
     # plt.yticks([-16, 0, 16])
     # ax.set_zticks([-16, 0, 16])
@@ -321,4 +390,46 @@ def create_magpy_sensors(grad_dir, grad_max, dsv, res, viewing, symmetry):
     print(Fore.GREEN + 'Done creating position sensors' + Style.RESET_ALL)
     
     return dsv_sensors, pos, Bz_target
+
+def psi2contour(x, y, psi, levels = 10, viewing = False):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')  
+    contours = ax.tricontour(x, y, psi, levels=levels, cmap='jet')
+    plt.close()
+    # viewing = True
+    if viewing is True:
+       fig = plt.figure()
+       ax = fig.add_subplot(111, projection='3d')
+       ax.plot_trisurf(x, y, psi, cmap='jet')
+       plt.show()
+       
+       fig = plt.figure()
+       ax = fig.add_subplot(111, projection='3d')  
+       ax.tricontour(x, y, psi, levels=levels, cmap='jet')
+       plt.show()
     
+    return  contours
+
+
+def gen_wire_vertices(vertices, level, wire_width, wire_gap):
+    ''' Generate the vertices of the wire patterns. '''
+    vertices_wire_widths = []
+    for vertex in vertices:
+        x, y, z = vertex
+        
+        # Thicken the line by a factor
+        factor = np.abs(level) * wire_width / 2
+        x_thick = x + factor * np.cos(level)
+        y_thick = y + factor * np.sin(level)
+        
+        # Check if the new line thickness exceeds wire_width
+        if np.linalg.norm([x_thick - x, y_thick - y]) > wire_width:
+            x_thick += wire_gap * np.cos(level)
+            y_thick += wire_gap * np.sin(level)
+        
+        vertices_wire_widths.append([x_thick, y_thick, z])
+
+    return np.array(vertices_wire_widths)
+    
+
+        

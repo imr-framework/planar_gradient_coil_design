@@ -1,5 +1,11 @@
+# TODO:
+# 1. Overlapping wires issue by adding a height of wire spacing
+# 2. Save the coordinates of the optimized coil
+# 3. Test the multi-objective optimization
+# 4. Run the mid-optimization 
 # --------------------------------------------------------------
 # Import necessary libraries
+
 from planar_gradient_coil import PlanarGradientCoil
 from utils import create_magpy_sensors
 import magpylib as magpy
@@ -17,15 +23,15 @@ import time
 # --------------------------------------------------------------
 # Setup geometry for a planar gradient coil
 grad_dir = 'x'
-radius =0.5 * 6 * 0.0254 # m
+radius =  0.5 * 6 * 0.0254 # m
 current = 10 # A
-mesh = 4 # number of points in the mesh 
+mesh = 6 # number of points in the mesh 
 target_field = 1 # get_field() # T
 wire_thickness = 1.3 * 1e-3 # m
 wire_spacing = 0.5 * wire_thickness # m
 viewing  = True
 heights = [-40 * 1e-3, 40 * 1e-3]  # m
-symmetry = True
+symmetry = False
 # Make an instance of the planar gradient coil class
 tenacity_grad_coil = PlanarGradientCoil(grad_dir = grad_dir, radius=radius, heights = heights, current=current, mesh=mesh, target_field=target_field, 
                             wire_thickness=wire_thickness, wire_spacing=wire_spacing, symmetry = symmetry)
@@ -33,21 +39,37 @@ tenacity_grad_coil = PlanarGradientCoil(grad_dir = grad_dir, radius=radius, heig
 # --------------------------------------------------------------
 # Set up the target magnetic field
 
-grad_max = 27 * 1e-3 * 1e-2 # T/m --> 0.1 B0
+grad_max = 27 * 1e-3 # T/m --> 0.1 B0 * 1e-2 
 dsv = 31 * 1e-3 # m
 res = 2 * 1e-3 # m
 viewing = True
-dsv_sensors, pos, Bz_target = create_magpy_sensors(grad_dir=grad_dir, grad_max=grad_max, dsv=dsv, res=res, viewing=viewing, symmetry=True)
+dsv_sensors, pos, Bz_target = create_magpy_sensors(grad_dir=grad_dir, grad_max=grad_max, dsv=dsv, res=res, viewing=viewing, symmetry=symmetry)
 
 #---------------------------------------------------------------
 # Optimize coil design 
+# Set up the optimization algorithm
+num_objectives = 1 # number of objectives 1 or 5 for now
+num_constraints = 0 # we will implement this later
+
+if num_objectives == 1:
+    num_regularizers = 5
+    alpha = np.zeros(num_regularizers)
+    alpha[0] = 1 # minimize point-wise Bz difference
+    alpha[1] = 0.1 # minimize max Bz difference 
+    alpha[2] = 0.1 # minimize  resistance
+    alpha[3] = 0.1 # minimize current
+    alpha[4] = 0.1 # ensure smoothness or wire patterns and avoid overlaps
+order = 2 # lp -> high fidelity for now
+    
 tenacity_grad_coil_optimize = gradient_problem(grad_coil=tenacity_grad_coil, sensors=dsv_sensors, pos=pos,
-                                               num_triangles_total=tenacity_grad_coil.num_triangles_total, target_field=Bz_target)
+                                               num_triangles_total=tenacity_grad_coil.num_triangles_total, target_field=Bz_target,
+                                               order=order, alpha=alpha, beta=0.5, B_tol = 5, n_obj=num_objectives, n_constr=num_constraints)
+
 opt_library = 'pymoo' # 'pymoo' or 'cvxpy'
 if opt_library == 'pymoo':
     #---------------------------------------------------------------
     # Use pymoo to optimize the coil design
-    pop_size = 2 * tenacity_grad_coil.triangles.shape[0]
+    pop_size = 2 * tenacity_grad_coil.nodes.shape[0]
     algorithm = MixedVariableGA(pop_size=pop_size, survival=RankAndCrowdingSurvival())
     tic = time.time()
     res_psi = minimize(tenacity_grad_coil_optimize,
@@ -63,21 +85,17 @@ elif opt_library == 'cvxpy':
     
 #---------------------------------------------------------------
 # Get the optimized gradient locations and visualize the coil and field
-# visualize_gradient_coil(biplanar_coil_pattern) - check for whole field 
 
-tenacity_grad_coil.load(psi, len(psi), pos, dsv_sensors, viewing = True)
-dsv_sensors_full, pos_full, _ = create_magpy_sensors(grad_dir=grad_dir, grad_max=grad_max, dsv=dsv, res=res, viewing=False, symmetry=False)
-tenacity_grad_coil.load(psi, len(psi), pos_full, dsv_sensors_full, viewing = True)
-print(Fore.GREEN + 'Optimized coil pattern loaded ...' + Style.RESET_ALL)
+tenacity_grad_coil.load(psi, len(psi), pos, dsv_sensors, viewing = False)
+tenacity_grad_coil.view(sensors = dsv_sensors, pos = pos, symmetry=True)
 
 #---------------------------------------------------------------
 # Compute coil performance metrics
 
-
-
-# Plot the results
-
-# Save the results to an STL file
+#---------------------------------------------------------------
+# Save the results to a csv file with coordinates for the positive and negative wires
+print(Fore.YELLOW + 'Saving the optimized wire pattern ...')
+tenacity_grad_coil.save(fname='tenacity_grad_coil.csv')
 
 
 

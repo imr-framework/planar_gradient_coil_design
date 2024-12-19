@@ -3,7 +3,7 @@ import matplotlib.tri as tri
 import matplotlib.pyplot as plt
 from colorama import Fore, Style
 import magpylib as magpy
-from utils import get_surface_current_density, compute_resistance, make_wire_patterns, get_magnetic_field, display_scatter_3D, visualize_gradient_coil
+from utils import get_surface_current_density, compute_resistance, make_wire_patterns_contours, get_magnetic_field, display_scatter_3D, visualize_gradient_coil
 
 
 class PlanarGradientCoil:
@@ -46,19 +46,17 @@ class PlanarGradientCoil:
         if self.symmetry is True:
             x, y = self.do_symmetry(x, y)
 
-
         # Create the Delaunay triangulation
         triang = tri.Triangulation(x, y)
 
         # Extract nodes of the triangulation
         nodes = np.vstack((triang.x, triang.y)).T
         print(Fore.GREEN + 'Number of nodes: ', nodes.shape[0], Style.RESET_ALL)
+        
 
         # Extract triangles
         triangles = triang.triangles
         print(Fore.GREEN + 'Number of triangles: ', triangles.shape[0], Style.RESET_ALL)
-        
-        
         
         debug = False
         if debug is True:
@@ -77,6 +75,8 @@ class PlanarGradientCoil:
             plt.show()
         self.triangles = triangles
         self.nodes = nodes
+        self.num_nodes_total = nodes.shape[0]
+        self.num_triangles_total = triangles.shape[0]
         
         return triangles, nodes
     
@@ -94,30 +94,6 @@ class PlanarGradientCoil:
             y = y[mask]
             
         return x, y
-        # filtered_triangles = []
-        # if self.grad_dir == 'x':
-        #     for triangle in self.triangles:
-        #         nodes = self.nodes[triangle]
-        #         if np.all(nodes[:, 1] > 0):
-        #             filtered_triangles.append(triangle)
-
-            
-        # elif self.grad_dir == 'y':
-        #     for triangle in self.triangles:
-        #         nodes = self.nodes[triangle]
-        #         if np.all(nodes[:, 0] > 0):
-        #             filtered_triangles.append(triangle)
-                        
-        # elif self.grad_dir == 'z':
-        #     for triangle in self.triangles:
-        #         nodes = self.nodes[triangle]
-        #         if np.all(nodes[:, 0] > 0) and np.all(nodes[:, 1] > 0):
-        #             filtered_triangles.append(triangle)
-                        
-                        
-        # self.triangles = np.array(filtered_triangles)
-        
-        # return self.triangles, self.nodes
         
         
     def make_coil_plates(self):
@@ -127,8 +103,11 @@ class PlanarGradientCoil:
         self.upper_coil_plate_triangles = triangles
         self.lower_coil_plate_triangles = triangles
         self.num_triangles_total = triangles.shape[0] * 2 # upper and lower plates
+        
         self.upper_coil_plate_nodes = nodes
         self.lower_coil_plate_nodes = nodes
+        
+        self.num_nodes_total = nodes.shape[0] * 2 # upper and lower plates
         
         self.upper_coil_plate_nodes_3D = np.concatenate((nodes, self.heights[0] * np.ones((nodes.shape[0], 1))), axis=1)
         self.lower_coil_plate_nodes_3D = np.concatenate((nodes, self.heights[1] * np.ones((nodes.shape[0], 1))), axis=1)
@@ -150,11 +129,11 @@ class PlanarGradientCoil:
           
         pass
     
-    def load(self, psi, num_triangles, pos, sensors, viewing=False):
+    def load(self, psi, num_nodes, pos, sensors, viewing=False):
         ''' Load the planar gradient coil. '''
         biplanar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
         self.psi = psi
-        psi = np.array([psi[f"x{child:02}"] for child in range(0, num_triangles)]) # all children should have same magnet positions to begin with
+        psi = np.array([psi[f"x{child:02}"] for child in range(0, num_nodes)]) # all children should have same magnet positions to begin with
         # compute current densities for all triangles
         N_each_plate = int(len(psi) * 0.5)
         upper_plate_triangles, upper_plate_ji, upper_plate_areas= get_surface_current_density(self.upper_coil_plate_triangles, self.upper_coil_plate_nodes_3D, psi[0:N_each_plate], p=2)
@@ -162,11 +141,17 @@ class PlanarGradientCoil:
         
     
         # make wire patterns accordingly including the magnet collection
-        self.upper_coil_wire_pattern = make_wire_patterns(upper_plate_triangles,upper_plate_ji, self.upper_coil_plate_nodes_3D,
-                                                                  height = self.upper_coil_plate_height, current = self.current, w=self.wire_thickness, g=self.wire_spacing, psi=psi, viewing=False)
+        # self.upper_coil_wire_pattern = make_wire_patterns(upper_plate_triangles,upper_plate_ji, self.upper_coil_plate_nodes_3D,
+                                                                #   height = self.upper_coil_plate_height, current =self.current, w=self.wire_thickness, g=self.wire_spacing, psi=psi, viewing=False)
+        
+        self.upper_coil_wire_pattern = make_wire_patterns_contours(upper_plate_triangles, self.upper_coil_plate_nodes_3D, psi=psi[0:N_each_plate], 
+                                                                   current=self.current, viewing=False)
+        self.lower_coil_wire_pattern = make_wire_patterns_contours(lower_plate_triangles, self.lower_coil_plate_nodes_3D, psi=psi[N_each_plate:],
+                                                                   current = self.current, viewing=False)
+        
         max_ji_upper = np.max(upper_plate_ji)
-        self.lower_coil_wire_pattern = make_wire_patterns(lower_plate_triangles,lower_plate_ji, self.lower_coil_plate_nodes_3D,
-                                                                  height = self.lower_coil_plate_height, current = self.current, w=self.wire_thickness, g=self.wire_spacing, psi = psi, viewing=False)
+        # self.lower_coil_wire_pattern = make_wire_patterns(lower_plate_triangles,lower_plate_ji, self.lower_coil_plate_nodes_3D,
+                                                                #   height = self.lower_coil_plate_height, current = self.current, w=self.wire_thickness, g=self.wire_spacing, psi = psi, viewing=False)
         max_ji_lower = np.max(lower_plate_ji)
         max_ji = np.max([max_ji_upper, max_ji_lower])
         
@@ -189,6 +174,7 @@ class PlanarGradientCoil:
         biplanar_coil_pattern.add(self.upper_coil_wire_pattern)
         biplanar_coil_pattern.add(self.lower_coil_wire_pattern)
         self.biplanar_coil_pattern = biplanar_coil_pattern
+        self.psi_array = psi
         if viewing is True:
             # biplanar_coil_pattern.show(backend='matplotlib')
             visualize_gradient_coil(biplanar_coil_pattern)
@@ -196,6 +182,18 @@ class PlanarGradientCoil:
             display_scatter_3D(pos[:, 0], pos[:, 1], pos[:, 2], Bz_grad, title='Magnetic Field of the Planar Gradient Coil')
         return self.biplanar_coil_pattern, self.coil_resistance, self.coil_current, max_ji
     
+    def view(self,  sensors, pos, symmetry=False):
+        ''' Visualize the planar gradient coil. '''
+        if symmetry is False:
+            coil_pattern = self.biplanar_coil_pattern_all
+        else:
+            coil_pattern = self.biplanar_coil_pattern
+            
+        visualize_gradient_coil(coil_pattern)
+            
+        Bz_grad = get_magnetic_field(coil_pattern, sensors, axis = 2)
+        display_scatter_3D(pos[:, 0], pos[:, 1], pos[:, 2], Bz_grad, title='Magnetic Field of the Planar Gradient Coil')
+        pass
     
     def compute_magnetic_field(self): # for Lorentz force later
         ''' Compute the magnetic field of the planar gradient coil. '''
@@ -243,3 +241,32 @@ class PlanarGradientCoil:
             
         coil_current = np.sum(self.triangle_current)
         return coil_current
+    
+    def undo_symmetry(self):
+        ''' Undo the symmetry reduction of the planar gradient coil. '''
+        self.symmetry = False
+        self.biplanar_coil_pattern_all = self.biplanar_coil_pattern
+        biplanar_coil_pattern = self.biplanar_coil_pattern
+        if (len(biplanar_coil_pattern)) > 1: # expects two plates
+            for plate in range(len(biplanar_coil_pattern)): 
+                plate_new = biplanar_coil_pattern.children[plate].copy()
+                for wire in range(len(biplanar_coil_pattern.children[plate].children)):
+                    wire_pattern = biplanar_coil_pattern.children[plate].children[wire]
+                    wire_pattern.vertices = np.array(wire_pattern.vertices)
+                    
+                    if self.grad_dir == 'x':
+                        wire_pattern.vertices[:, 1] = - wire_pattern.vertices[:, 1]
+                    elif self.grad_dir == 'y':
+                        wire_pattern.vertices[:, 0] = - wire_pattern.vertices[:, 0]
+                        
+                    vertices = np.array(wire_pattern.vertices)
+                    plate_new.add(magpy.current.Polyline(current=wire_pattern.current, vertices=vertices))
+                
+                self.biplanar_coil_pattern_all.add(plate_new) 
+               
+        pass
+    
+    def save(self, fname:str=None):
+        ''' Save the planar gradient coil. '''
+        visualize_gradient_coil(self.biplanar_coil_pattern, save = True, fname_save=fname)
+        pass
