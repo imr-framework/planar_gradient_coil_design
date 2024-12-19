@@ -1,5 +1,5 @@
 # TODO:
-# 1. Overlapping wires issue by adding a height of wire spacing
+# 1. Overlapping wires issue by adding a height of wire spacing - need to check this by simulating
 # 2. Save the coordinates of the optimized coil
 # 3. Test the multi-objective optimization
 # 4. Run the mid-optimization 
@@ -28,7 +28,7 @@ current = 10 # A
 mesh = 6 # number of points in the mesh 
 target_field = 1 # get_field() # T
 wire_thickness = 1.3 * 1e-3 # m
-wire_spacing = 0.5 * wire_thickness # m
+wire_spacing = 1 * wire_thickness # m
 viewing  = True
 heights = [-40 * 1e-3, 40 * 1e-3]  # m
 symmetry = False
@@ -98,5 +98,13 @@ print(Fore.YELLOW + 'Saving the optimized wire pattern ...')
 fname = 'tenacity_grad_coil_' + tenacity_grad_coil.grad_dir + '.csv'
 tenacity_grad_coil.save(fname=fname)
 
+#---------------------------------------------------------------
+# Filter the wire pattern to remove overlapping wires by adding a height of wire spacing and store the positive and negative wires in two files
+print(Fore.YELLOW + 'Filtering the wire pattern ...')
+tenacity_grad_coil.filter_wires_and_save(fname=fname)
+
+#---------------------------------------------------------------
+# Check the new filtered wires for Bz field achieved
+# tenacity_grad_coil.load_from_csv(fnames = [fname_positive, fname_negative])
 
 

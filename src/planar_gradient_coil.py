@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from colorama import Fore, Style
 import magpylib as magpy
 from utils import get_surface_current_density, compute_resistance, make_wire_patterns_contours, get_magnetic_field, display_scatter_3D, visualize_gradient_coil
+import csv
+
 
 
 class PlanarGradientCoil:
@@ -269,4 +271,51 @@ class PlanarGradientCoil:
     def save(self, fname:str=None):
         ''' Save the planar gradient coil. '''
         visualize_gradient_coil(self.biplanar_coil_pattern, save = True, fname_save=fname)
+        pass
+    
+    def filter_wires_and_save(self, fname:str=None):
+        ''' Filter the wire patterns to remove overlapping wires. '''
+        # Load the wire patterns' coordinates and current direction from file in fname
+        # Load the wire patterns' coordinates and current direction from file in fname
+        with open(fname, newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            wire_data = list(reader)
+
+        currents = np.array([float(row[0]) for row in wire_data[1:]])
+        coordinates = np.array([[float(value) for value in row[1:]] for row in wire_data[1:]])
+
+        
+        # Add wire spacing to z coordinate of repeated coordinates
+        unique_coords = []
+        for coord in coordinates:
+            while any(np.allclose(coord, unique_coord) for unique_coord in unique_coords):
+                coord[2] += self.wire_spacing
+            unique_coords.append(coord)
+        coordinates = np.array(unique_coords)
+        
+    
+        # Separate positive and negative current wires
+        positive_wires = coordinates[currents > 0]
+        negative_wires = coordinates[currents < 0]
+        
+        
+
+        # Save positive and negative wires to separate files
+        positive_fname = fname.replace('.csv', '_positive.csv')
+        negative_fname = fname.replace('.csv', '_negative.csv')
+
+        with open(positive_fname, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['x', 'y', 'z'])
+            writer.writerows(positive_wires)
+            
+        with open(negative_fname, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['x', 'y', 'z'])
+            writer.writerows(negative_wires)
+        # 
+        
+        # Store the positive and negative wires in two files with the same name as fname but with _positive and _negative
+        
+        
         pass
