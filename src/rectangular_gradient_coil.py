@@ -95,3 +95,57 @@ class PlanarGradientCoil_rectangle:
         visualize_gradient_coil(self.biplanar_coil_pattern, save = True, fname_save=fname)
         pass
     
+    def save_loops(self, fname_csv_file:str=None, loop_tolerance = 1, viewing = True):
+        ''' Filter the wire patterns to remove overlapping wires. '''
+        # Load the wire patterns' coordinates and current direction from file in fname
+        # Load the wire patterns' coordinates and current direction from file in fname
+        biplanar_coil_pattern = self.biplanar_coil_pattern
+        wire_num_negative= int(-1)
+        wire_num_positive=int(-1)
+        for plate in biplanar_coil_pattern.children:
+            for wire_pattern in plate.children:
+                current = wire_pattern.current
+                coordinates = wire_pattern.vertices
+                
+                if current > 0:
+                    positive_wires = np.round(coordinates * 1e3, decimals=0)
+                    positive_wires_collated = identify_loops(positive_wires, loop_tolerance = loop_tolerance)
+                    for wire in range(0, len(positive_wires_collated)):
+                        positive_wires_each = positive_wires_collated[wire]
+                        wire_num_positive += 1
+                        positive_wires_each = positive_wires_each[: : 2, :]
+                        fname = 'positive_wires_'  + str(wire_num_positive) + '_' + fname_csv_file
+                        self.write_loop_csv(positive_wires[:-1, :], fname = fname)
+                        plt.plot(positive_wires[:, 0], positive_wires[:, 1], 'ro', label='Positive Wires - before filtering')
+                        plt.show()
+                else:
+                    negative_wires = np.round(coordinates * 1e3, decimals=0)
+                    negative_wires_collated = identify_loops(negative_wires, loop_tolerance = loop_tolerance)
+                    for wire in range(0, len(negative_wires_collated)):
+                        negative_wires_each = negative_wires_collated[wire]
+                        wire_num_negative += 1
+                        negative_wires_each = negative_wires_each[: : 2, :]
+                        fname = 'negative_wires_'  + str(wire_num_negative) + '_' + fname_csv_file
+                        self.write_loop_csv(negative_wires[: -1, :], fname = fname)
+                        plt.plot(negative_wires[:, 0], negative_wires[:, 1], 'bo', label='Negative Wires - before filtering')
+                        plt.show()
+                    
+            
+        
+        # plt.title('Positive Wires - before filtering')
+        # plt.show()
+        
+        # 
+        # plt.title('Negative Wires - before filtering')
+        plt.show()
+        
+            
+    def write_loop_csv(self, coordinates, fname:str=None):
+        ''' Write the wire patterns to a CSV file. '''
+        with open(fname, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            for row in coordinates:
+                writer.writerow(row)
+           
+        
+        pass

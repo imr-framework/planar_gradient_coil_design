@@ -46,7 +46,7 @@ dsv = 31 * 1e-3 # m
 res = 4 * 1e-3 # m
 viewing = True
 dsv_sensors, pos, Bz_target = create_magpy_sensors(grad_dir=grad_dir, grad_max=grad_max, dsv=dsv, res=res, viewing=viewing, symmetry=symmetry)
-linearity_percentage = 20 # 5% linearity
+linearity_percentage = 80 # 5% linearity
 #---------------------------------------------------------------
 # Optimize coil design 
 # Set up the optimization algorithm
@@ -54,7 +54,7 @@ num_objectives = 2 # number of objectives 1 or 5 for now
 num_constraints = 1 # multi-objective optimization with multiple constraints
 num_levels = 10 # No of contour levels to extract from the stream function per plate
 order = 2 # lp -> high fidelity for now
-iterations = 100 # number of iterations
+iterations = 5 # number of iterations
 
 if num_constraints == 0:
     num_regularizers = 5
@@ -87,22 +87,19 @@ if opt_library == 'pymoo':
     print(Fore.YELLOW + 'Wire pattern search ends ...')
     print(Fore.YELLOW + 'Time taken for optimization:' + str(toc - tic) + 's')
     psi = res_psi.X
-    
-elif opt_library == 'cvxpy':
-    tenacity_grad_coil_optimize.evaluate_cvx()
+
     
 #---------------------------------------------------------------
 # Get the optimized gradient locations and visualize the coil and field
 if psi is not None and len(psi) > 0:
     tenacity_grad_coil.load(psi[0], tenacity_grad_coil_optimize.num_psi_weights, tenacity_grad_coil_optimize.num_levels, 
                         tenacity_grad_coil_optimize.pos, tenacity_grad_coil_optimize.sensors, viewing = True)
-    tenacity_grad_coil.view(sensors = dsv_sensors, pos = pos, symmetry=True)
+    # tenacity_grad_coil.view(sensors = dsv_sensors, pos = pos, symmetry=True)
 else:
     print(Fore.RED + 'Optimization did not produce a valid result.' + Style.RESET_ALL)
 
 #---------------------------------------------------------------
 # Compute coil performance metrics
-
 
 # --------------------------------------------------------------
 # Out of the optimized gradient coil patterns, choose the one to save
@@ -112,7 +109,8 @@ else:
 print(Fore.YELLOW + 'Saving the optimized wire pattern ...')
 fname = 'tenacity_grad_coil_' + tenacity_grad_coil.grad_dir + '.csv'
 tenacity_grad_coil.save(fname=fname)
-
+tenacity_grad_coil.save_loops(fname_csv_file=fname)
+print(Fore.YELLOW + 'Optimized wire pattern saved to: ' + fname + Style.RESET_ALL)
 #---------------------------------------------------------------
 # Filter the wire pattern to remove overlapping wires by adding a height of wire spacing and store the positive and negative wires in two files
 # print(Fore.YELLOW + 'Filtering the wire pattern ...')

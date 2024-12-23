@@ -45,7 +45,7 @@ class gradient_problem(ElementwiseProblem):
     def _evaluate(self, x, out, *args, **kwargs):
         self.biplanar_coil_pattern, self.coil_resistance, self.coil_current, max_ji, self.psi_smoothness, self.wire_smoothness =self.grad_coil.load(vars = x,  
                                                                                     num_psi_weights = self.num_psi_weights, num_levels = self.num_levels, pos = self.pos, sensors = self.sensors, viewing = False)
-        if (len(self.biplanar_coil_pattern)==0):
+        if (len(self.biplanar_coil_pattern.children[0])==0) and (len(self.biplanar_coil_pattern.children[1])==0): # for the case when no wires are present
            self.grad_coil_field = 0
         else:
             self.grad_coil_field= get_magnetic_field(self.biplanar_coil_pattern, self.sensors, axis = 2)

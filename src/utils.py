@@ -8,6 +8,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
 from scipy.interpolate import interp2d 
+from shapely.geometry import LineString
 
 
 # Design the target magnetic field - Bz
@@ -488,84 +489,12 @@ def gen_wire_vertices(vertices, level, wire_width, wire_gap):
 
 
 
-def check_intersection(loop1, loop2):
-    """
-    Checks if two loops intersect.
-
-    Args:
-        loop1 (list of tuples): List of (x, y) coordinate tuples representing the first loop.
-        loop2 (list of tuples): List of (x, y) coordinate tuples representing the second loop.
-
-    Returns:
-        bool: True if the loops intersect, False otherwise.
-    """
-
-    for i in range(len(loop1)):
-        for j in range(len(loop2)):
-            p1, p2 = loop1[i], loop1[(i + 1) % len(loop1)]
-            q1, q2 = loop2[j], loop2[(j + 1) % len(loop2)]
-
-            if do_intersect(p1, p2, q1, q2):
-                return True
-
-    return False
-
-def do_intersect(p1, p2, q1, q2):
-    """
-    Checks if two line segments intersect.
-
-    Args:
-        p1 (tuple): (x, y) coordinates of the first point of the first segment.
-        p2 (tuple): (x, y) coordinates of the second point of the first segment.
-        q1 (tuple): (x, y) coordinates of the first point of the second segment.
-        q2 (tuple): (x, y) coordinates of the second point of the second segment.
-
-    Returns:
-        bool: True if the segments intersect, False otherwise.
-    """
-
-    def orientation(p, q, r):
-        val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
-        if val == 0:
-            return 0  # Collinear
-        return 1 if val > 0 else 2  # Clockwise or counterclockwise
-
-    o1 = orientation(p1, p2, q1)
-    o2 = orientation(p1, p2, q2)
-    o3 = orientation(q1, q2, p1)
-    o4 = orientation(q1, q2, p2)
-
-    if o1 != o2 and o3 != o4:
-        return True
-
-    # Special cases (collinear)
-    if o1 == 0 and on_segment(p1, q1, p2):
-        return True
-    if o2 == 0 and on_segment(p1, q2, p2):
-        return True
-    if o3 == 0 and on_segment(q1, p1, q2):
-        return True
-    if o4 == 0 and on_segment(q1, p2, q2):
-        return True
-
-    return False
-
-def on_segment(p, q, r):
-    """
-    Checks if point q lies on segment pr.
-
-    Args:
-        p (tuple): (x, y) coordinates of the first point.
-        q (tuple): (x, y) coordinates of the second point.
-        r (tuple): (x, y) coordinates of the third point.
-
-    Returns:
-        bool: True if q lies on segment pr, False otherwise.
-    """
-
-    return (q[0] <= max(p[0], r[0]) and q[0] >= min(p[0], r[0]) and
-            q[1] <= max(p[1], r[1]) and q[1] >= min(p[1], r[1]))
-    
+def check_intersection(curve1, curve2):
+    ''' Check if two loops intersect. '''
+    curve1 = LineString(curve1)
+    curve2 = LineString(curve2)
+    return curve1.crosses(curve2) 
+  
 def get_psi_smoothness(nodes, psi):
     ''' Compute the smoothness of the stream function. '''
     
@@ -652,19 +581,33 @@ def get_wire_patterns_contour_rect(psi, levels, stream_function, x, y, z, curren
     planar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
     wire_smoothness = 0
     contours = psi2contour_rect(x, y, psi, stream_function, levels = levels, viewing = False)
-
+    vertices_all = []
     for collection, level  in zip(contours.collections, contours.levels):
         paths = collection.get_paths()
         current_direction = np.sign(level)
         for path in paths:
             vertices = path.vertices
-            loop_vertices_wire_widths = np.array([vertices[:, 0], vertices[:, 1], z * np.ones(vertices[:, 0].shape)]).T
-            gradient_x = np.gradient(loop_vertices_wire_widths[:, 0])
-            gradient_y = np.gradient(loop_vertices_wire_widths[:, 1])
+            intersect = check_intersection(vertices, vertices_all)
+            if intersect is False:
+                if len(vertices_all) ==0:
+                    vertices_all = vertices
+                else:
+                    vertices_all = np.vstack((vertices_all, vertices))
+                    loop_vertices_wire_widths = np.array([vertices[:, 0], vertices[:, 1], z * np.ones(vertices[:, 0].shape)]).T
+                    gradient_x = np.gradient(loop_vertices_wire_widths[:, 0])
+                    gradient_y = np.gradient(loop_vertices_wire_widths[:, 1])
+                    wire_smoothness += np.linalg.norm(np.sqrt(gradient_x**2 + gradient_y**2))
+                    planar_coil_pattern.add(magpy.current.Polyline(current=current * current_direction, 
+                                                            vertices = loop_vertices_wire_widths))
+            # plt.plot(vertices_all[:, 0], vertices_all[:, 1], 'ro')
+            # plt.show()
+            
                 
-            wire_smoothness += np.linalg.norm(np.sqrt(gradient_x**2 + gradient_y**2))
-            planar_coil_pattern.add(magpy.current.Polyline(current=current * current_direction, 
-                                                        vertices = loop_vertices_wire_widths)) 
+            # else:
+                # print(Fore.RED + 'Overlap detected' + Style.RESET_ALL)
+                
+                
+                        
     return planar_coil_pattern, wire_smoothness
 
 
@@ -709,3 +652,26 @@ def psi2contour_rect(x, y, psi, stream_function, levels, viewing = False):
        plt.show()
     
     return  contours
+
+
+def identify_loops(vertices, loop_tolerance = 5):
+    vertices_collated = []
+    
+    for i in range(vertices.shape[0] - 1):
+        single_loop = True
+        if i == 0:
+            loop = [vertices[i, :]]
+        else:
+            if np.linalg.norm(vertices[i + 1 , :] - vertices[i, :]) < loop_tolerance:
+                loop.append(vertices[i, :])
+            else:
+                single_loop = False
+                loop.append(vertices[i, :])
+                vertices_collated.append(np.array(loop))
+                loop = []
+        if single_loop is True:
+            vertices_collated.append(np.array(loop))
+    return vertices_collated
+    
+    
+    

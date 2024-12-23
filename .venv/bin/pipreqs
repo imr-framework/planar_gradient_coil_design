@@ -1,4 +1,4 @@
-#!/home/mri4all/Documents/Tools/gradient_coil/planar_gradient_coil_design/.venv/bin/python
+#!/Users/sairamgeethanath/Documents/Projects/Tools/Low_field/Tenacity/Gradients/planar_gradient_coil_design/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
