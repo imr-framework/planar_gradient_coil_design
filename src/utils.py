@@ -657,20 +657,19 @@ def psi2contour_rect(x, y, psi, stream_function, levels, viewing = False):
 def identify_loops(vertices, loop_tolerance = 5):
     vertices_collated = []
     
-    for i in range(vertices.shape[0] - 1):
-        single_loop = True
-        if i == 0:
-            loop = [vertices[i, :]]
-        else:
-            if np.linalg.norm(vertices[i + 1 , :] - vertices[i, :]) < loop_tolerance:
-                loop.append(vertices[i, :])
-            else:
-                single_loop = False
-                loop.append(vertices[i, :])
-                vertices_collated.append(np.array(loop))
-                loop = []
-        if single_loop is True:
-            vertices_collated.append(np.array(loop))
+    x = vertices[:, 0]
+    y = vertices[:, 1]
+    dist = np.sqrt(np.diff(x)**2 + np.diff(y)**2)
+    loop_starts = np.where(dist > loop_tolerance)[0] + 1
+    
+    if len(loop_starts) == 0:
+        vertices_collated.append(vertices)
+    else:
+        loop_starts = np.insert(loop_starts, 0, 0)
+        loop_starts = np.append(loop_starts, len(x))
+        for i in range(len(loop_starts) - 1):
+            vertices_collated.append(vertices[loop_starts[i]:loop_starts[i + 1], :])
+        
     return vertices_collated
     
     

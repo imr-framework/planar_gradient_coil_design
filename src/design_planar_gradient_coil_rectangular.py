@@ -109,7 +109,7 @@ else:
 print(Fore.YELLOW + 'Saving the optimized wire pattern ...')
 fname = 'tenacity_grad_coil_' + tenacity_grad_coil.grad_dir + '.csv'
 tenacity_grad_coil.save(fname=fname)
-tenacity_grad_coil.save_loops(fname_csv_file=fname)
+tenacity_grad_coil.save_loops(fname_csv_file=fname,loop_tolerance=5)
 print(Fore.YELLOW + 'Optimized wire pattern saved to: ' + fname + Style.RESET_ALL)
 #---------------------------------------------------------------
 # Filter the wire pattern to remove overlapping wires by adding a height of wire spacing and store the positive and negative wires in two files

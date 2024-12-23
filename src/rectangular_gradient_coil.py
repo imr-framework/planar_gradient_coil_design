@@ -100,8 +100,8 @@ class PlanarGradientCoil_rectangle:
         # Load the wire patterns' coordinates and current direction from file in fname
         # Load the wire patterns' coordinates and current direction from file in fname
         biplanar_coil_pattern = self.biplanar_coil_pattern
-        wire_num_negative= int(-1)
-        wire_num_positive=int(-1)
+        wire_num_negative= int(0)
+        wire_num_positive=int(0)
         for plate in biplanar_coil_pattern.children:
             for wire_pattern in plate.children:
                 current = wire_pattern.current
@@ -115,8 +115,8 @@ class PlanarGradientCoil_rectangle:
                         wire_num_positive += 1
                         positive_wires_each = positive_wires_each[: : 2, :]
                         fname = 'positive_wires_'  + str(wire_num_positive) + '_' + fname_csv_file
-                        self.write_loop_csv(positive_wires[:-1, :], fname = fname)
-                        plt.plot(positive_wires[:, 0], positive_wires[:, 1], 'ro', label='Positive Wires - before filtering')
+                        self.write_loop_csv(positive_wires_each[:-1, :], fname = fname)
+                        plt.plot(positive_wires_each[:, 0], positive_wires_each[:, 1], 'ro', label='Positive Wires - before filtering')
                         plt.show()
                 else:
                     negative_wires = np.round(coordinates * 1e3, decimals=0)
@@ -126,17 +126,10 @@ class PlanarGradientCoil_rectangle:
                         wire_num_negative += 1
                         negative_wires_each = negative_wires_each[: : 2, :]
                         fname = 'negative_wires_'  + str(wire_num_negative) + '_' + fname_csv_file
-                        self.write_loop_csv(negative_wires[: -1, :], fname = fname)
-                        plt.plot(negative_wires[:, 0], negative_wires[:, 1], 'bo', label='Negative Wires - before filtering')
+                        self.write_loop_csv(negative_wires_each[: -1, :], fname = fname)
+                        plt.plot(negative_wires_each[:, 0], negative_wires_each[:, 1], 'bo', label='Negative Wires - before filtering')
                         plt.show()
                     
-            
-        
-        # plt.title('Positive Wires - before filtering')
-        # plt.show()
-        
-        # 
-        # plt.title('Negative Wires - before filtering')
         plt.show()
         
             
