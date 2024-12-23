@@ -5,10 +5,8 @@ import magpylib as magpy
 from pymoo.core.variable import Real, Integer, Choice, Binary
 from colorama import Fore, Style
 from mpl_toolkits.mplot3d import Axes3D
-import cv2
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
-from shapely.geometry import Polygon
 from scipy.interpolate import interp2d 
 
 
@@ -622,12 +620,7 @@ def fit_ellipse_contour(vertices, oversampling = 2):
   
 
 
-def is_polygon(vertices):
-    try:
-        Polygon(vertices)
-        return True
-    except ValueError:
-        return False
+
 
 def is_closed(vertices):
     dist =  np.sum(vertices[0] - vertices[-1])

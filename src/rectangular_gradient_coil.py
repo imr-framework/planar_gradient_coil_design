@@ -57,7 +57,7 @@ class PlanarGradientCoil_rectangle:
         
         biplanar_coil_pattern.add(upper_plate_wire_patterns)
         biplanar_coil_pattern.add(lower_plate_wire_patterns)
-        
+        self.biplanar_coil_pattern = biplanar_coil_pattern
         
         # Smoothness parameters
         gradient_psi_ux, gradient_psi_uy = np.gradient(psi_upper_plate)
@@ -79,7 +79,7 @@ class PlanarGradientCoil_rectangle:
             Bz_grad = get_magnetic_field(biplanar_coil_pattern, sensors, axis = 2)
             display_scatter_3D(pos[:, 0], pos[:, 1], pos[:, 2], Bz_grad, title='Magnetic Field of the Planar Gradient Coil')
     
-        return biplanar_coil_pattern, coil_resistance, coil_current, max_ji, psi_smoothness, wire_smoothness
+        return self.biplanar_coil_pattern, coil_resistance, coil_current, max_ji, psi_smoothness, wire_smoothness
 
     def view(self,  sensors, pos, symmetry=False):
         ''' Visualize the planar gradient coil. '''
@@ -90,4 +90,8 @@ class PlanarGradientCoil_rectangle:
         display_scatter_3D(pos[:, 0], pos[:, 1], pos[:, 2], Bz_grad, title='Magnetic Field of the Planar Gradient Coil')
         pass
     
+    def save(self, fname:str=None):
+        ''' Save the planar gradient coil. '''
+        visualize_gradient_coil(self.biplanar_coil_pattern, save = True, fname_save=fname)
+        pass
     

@@ -53,6 +53,8 @@ linearity_percentage = 20 # 5% linearity
 num_objectives = 2 # number of objectives 1 or 5 for now
 num_constraints = 1 # multi-objective optimization with multiple constraints
 num_levels = 10 # No of contour levels to extract from the stream function per plate
+order = 2 # lp -> high fidelity for now
+iterations = 100 # number of iterations
 
 if num_constraints == 0:
     num_regularizers = 5
@@ -64,8 +66,7 @@ if num_constraints == 0:
     alpha[4] = 0 # ensure smoothness or wire patterns and avoid overlaps
 else:   
     alpha = np.zeros(1)
-order = 2 # lp -> high fidelity for now
-iterations = 250 # number of iterations
+
 
 tenacity_grad_coil_optimize = gradient_problem(grad_coil=tenacity_grad_coil, sensors=dsv_sensors, pos=pos,
                                                target_field=Bz_target,
@@ -93,7 +94,7 @@ elif opt_library == 'cvxpy':
 #---------------------------------------------------------------
 # Get the optimized gradient locations and visualize the coil and field
 if psi is not None and len(psi) > 0:
-    tenacity_grad_coil.load(psi, tenacity_grad_coil_optimize.num_psi_weights, tenacity_grad_coil_optimize.num_levels, 
+    tenacity_grad_coil.load(psi[0], tenacity_grad_coil_optimize.num_psi_weights, tenacity_grad_coil_optimize.num_levels, 
                         tenacity_grad_coil_optimize.pos, tenacity_grad_coil_optimize.sensors, viewing = True)
     tenacity_grad_coil.view(sensors = dsv_sensors, pos = pos, symmetry=True)
 else:
@@ -101,6 +102,10 @@ else:
 
 #---------------------------------------------------------------
 # Compute coil performance metrics
+
+
+# --------------------------------------------------------------
+# Out of the optimized gradient coil patterns, choose the one to save
 
 #---------------------------------------------------------------
 # Save the results to a csv file with coordinates for the positive and negative wires
@@ -110,7 +115,7 @@ tenacity_grad_coil.save(fname=fname)
 
 #---------------------------------------------------------------
 # Filter the wire pattern to remove overlapping wires by adding a height of wire spacing and store the positive and negative wires in two files
-print(Fore.YELLOW + 'Filtering the wire pattern ...')
+# print(Fore.YELLOW + 'Filtering the wire pattern ...')
 # tenacity_grad_coil.filter_wires_and_save(fname=fname)
 
 #---------------------------------------------------------------

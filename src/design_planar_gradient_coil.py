@@ -84,8 +84,7 @@ if opt_library == 'pymoo':
     print(Fore.YELLOW + 'Time taken for optimization:' + str(toc - tic) + 's')
     psi = res_psi.X
     
-elif opt_library == 'cvxpy':
-    tenacity_grad_coil_optimize.evaluate_cvx()
+
     
 #---------------------------------------------------------------
 # Get the optimized gradient locations and visualize the coil and field
