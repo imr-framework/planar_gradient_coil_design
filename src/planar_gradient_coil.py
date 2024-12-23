@@ -3,7 +3,7 @@ import matplotlib.tri as tri
 import matplotlib.pyplot as plt
 from colorama import Fore, Style
 import magpylib as magpy
-from utils import get_surface_current_density, compute_resistance, make_wire_patterns_contours, get_magnetic_field, display_scatter_3D, visualize_gradient_coil
+from utils import *
 import csv
 
 
@@ -29,8 +29,11 @@ class PlanarGradientCoil:
         self.lower_coil_plate_height = heights[1]
         self.symmetry = symmetry
         self.make_coil_plates()
+    
+
         
         
+    
     def get_triangles(self, viewing=False):
         ''' Get triangles from the mesh of a particular circular region. '''
         
@@ -131,58 +134,73 @@ class PlanarGradientCoil:
           
         pass
     
-    def load(self, psi, num_nodes, pos, sensors, viewing=False):
+    def load(self, vars, num_nodes, num_levels,pos, sensors, viewing=False):
         ''' Load the planar gradient coil. '''
         biplanar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
-        self.psi = psi
-        psi = np.array([psi[f"x{child:02}"] for child in range(0, num_nodes)]) # all children should have same magnet positions to begin with
+      
+        psi = np.array([vars[f"x{child:02}"] for child in range(0, num_nodes)]) # all children should have same magnet positions to begin with
+        levels = np.array([vars[f"x{child:02}"] for child in range(num_nodes, num_nodes + num_levels)])
+        
         # compute current densities for all triangles
-        N_each_plate = int(len(psi) * 0.5)
-        upper_plate_triangles, upper_plate_ji, upper_plate_areas= get_surface_current_density(self.upper_coil_plate_triangles, self.upper_coil_plate_nodes_3D, psi[0:N_each_plate], p=2)
-        lower_plate_triangles, lower_plate_ji, lower_plate_area = get_surface_current_density(self.lower_coil_plate_triangles, self.lower_coil_plate_nodes_3D, psi[N_each_plate:], p=2)
+        N_psi_each_plate = int(len(psi) * 0.5)
+        N_levels_each_plate = int(len(levels) * 0.5)
+        # We will functionalize this in the second iteration
+        # upper_plate_triangles, upper_plate_ji, upper_plate_areas= get_surface_current_density(self.upper_coil_plate_triangles, self.upper_coil_plate_nodes_3D, psi[0:N_each_plate], p=2)
+        # lower_plate_triangles, lower_plate_ji, lower_plate_area = get_surface_current_density(self.lower_coil_plate_triangles, self.lower_coil_plate_nodes_3D, psi[N_each_plate:], p=2)
         
-    
-        # make wire patterns accordingly including the magnet collection
-        # self.upper_coil_wire_pattern = make_wire_patterns(upper_plate_triangles,upper_plate_ji, self.upper_coil_plate_nodes_3D,
-                                                                #   height = self.upper_coil_plate_height, current =self.current, w=self.wire_thickness, g=self.wire_spacing, psi=psi, viewing=False)
+
+        self.upper_coil_wire_pattern, self.wire_smoothness_upper = make_wire_patterns_contours(self.upper_coil_plate_nodes_3D, psi=psi[0:N_psi_each_plate], levels = levels[0:N_levels_each_plate],
+                                                                   current=self.current, grad_dir=self.grad_dir, wire_width=self.wire_thickness, wire_gap=self.wire_spacing, viewing=False)
+        self.lower_coil_wire_pattern, self.wire_smoothness_lower = make_wire_patterns_contours(self.lower_coil_plate_nodes_3D, psi=psi[N_psi_each_plate:], levels=levels[N_levels_each_plate:],
+                                                                   current = self.current, grad_dir=self.grad_dir, wire_width=self.wire_thickness, wire_gap=self.wire_spacing,viewing=False)
         
-        self.upper_coil_wire_pattern = make_wire_patterns_contours(upper_plate_triangles, self.upper_coil_plate_nodes_3D, psi=psi[0:N_each_plate], 
-                                                                   current=self.current, wire_width=self.wire_thickness, wire_gap=self.wire_spacing, viewing=False)
-        self.lower_coil_wire_pattern = make_wire_patterns_contours(lower_plate_triangles, self.lower_coil_plate_nodes_3D, psi=psi[N_each_plate:],
-                                                                   current = self.current, wire_width=self.wire_thickness, wire_gap=self.wire_spacing,viewing=False)
-        
-        max_ji_upper = np.max(upper_plate_ji)
-        # self.lower_coil_wire_pattern = make_wire_patterns(lower_plate_triangles,lower_plate_ji, self.lower_coil_plate_nodes_3D,
-                                                                #   height = self.lower_coil_plate_height, current = self.current, w=self.wire_thickness, g=self.wire_spacing, psi = psi, viewing=False)
-        max_ji_lower = np.max(lower_plate_ji)
-        max_ji = np.max([max_ji_upper, max_ji_lower])
+        # max_ji_upper = np.max(upper_plate_ji)
+        # max_ji_lower = np.max(lower_plate_ji)
+        # max_ji = np.max([max_ji_upper, max_ji_lower])
         
         
         # Compute terms required for optimization
         #---------------------------------------------------------------
-        # Compute the resistance of the coil plates
-        upper_plate_resistance = self.compute_resistance(upper_plate_ji, upper_plate_areas)
-        lower_plate_resistance = self.compute_resistance(lower_plate_ji, lower_plate_area)
+        # # Compute the resistance of the coil plates
+        # upper_plate_resistance = self.compute_resistance(upper_plate_ji, upper_plate_areas)
+        # lower_plate_resistance = self.compute_resistance(lower_plate_ji, lower_plate_area)
         
-        # compute the resistance of the coil
-        self.coil_resistance = upper_plate_resistance + lower_plate_resistance
+        # # compute the resistance of the coil
+        # self.coil_resistance = upper_plate_resistance + lower_plate_resistance
         
         #---------------------------------------------------------------
         # Compute the current in the coil from all the triangles
-        upper_plate_coil_current = self.compute_current_triangles(upper_plate_ji, upper_plate_areas)
-        lower_plate_coil_current = self.compute_current_triangles(lower_plate_ji, lower_plate_area)
-        self.coil_current = upper_plate_coil_current + lower_plate_coil_current
+        # upper_plate_coil_current = self.compute_current_triangles(upper_plate_ji, upper_plate_areas)
+        # lower_plate_coil_current = self.compute_current_triangles(lower_plate_ji, lower_plate_area)
+        # self.coil_current = upper_plate_coil_current + lower_plate_coil_current
          
         biplanar_coil_pattern.add(self.upper_coil_wire_pattern)
         biplanar_coil_pattern.add(self.lower_coil_wire_pattern)
         self.biplanar_coil_pattern = biplanar_coil_pattern
+        
+        # Compute the smoothness of d(psi)/dr
+        #---------------------------------------------------------------
         self.psi_array = psi
+        psi_smoothness_upper = get_psi_smoothness(self.upper_coil_plate_nodes_3D, psi=self.psi_array[0:N_psi_each_plate])
+        psi_smoothness_lower = get_psi_smoothness(self.lower_coil_plate_nodes_3D, psi=self.psi_array[N_psi_each_plate:])
+        
+        self.psi_smoothness = psi_smoothness_upper + psi_smoothness_lower
+        
+        # Compute the smoothness of the wire patterns
+        #---------------------------------------------------------------
+        self.wire_smoothness = self.wire_smoothness_upper + self.wire_smoothness_lower
+        
+        # return these back to computations
+        self.coil_resistance = 0
+        self.coil_current = 0
+        max_ji = 0
+        
         if viewing is True:
             # biplanar_coil_pattern.show(backend='matplotlib')
             visualize_gradient_coil(biplanar_coil_pattern)
             Bz_grad = get_magnetic_field(biplanar_coil_pattern, sensors, axis = 2)
             display_scatter_3D(pos[:, 0], pos[:, 1], pos[:, 2], Bz_grad, title='Magnetic Field of the Planar Gradient Coil')
-        return self.biplanar_coil_pattern, self.coil_resistance, self.coil_current, max_ji
+        return self.biplanar_coil_pattern, self.coil_resistance, self.coil_current, max_ji, self.psi_smoothness, self.wire_smoothness
     
     def view(self,  sensors, pos, symmetry=False):
         ''' Visualize the planar gradient coil. '''

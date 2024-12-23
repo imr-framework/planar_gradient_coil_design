@@ -5,10 +5,16 @@ import magpylib as magpy
 from pymoo.core.variable import Real, Integer, Choice, Binary
 from colorama import Fore, Style
 from mpl_toolkits.mplot3d import Axes3D
+import cv2
+from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import gaussian_filter
+from shapely.geometry import Polygon
+from scipy.interpolate import interp2d 
 
 
 # Design the target magnetic field - Bz
-def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res:float = 2, symmetry = True, viewing = False):
+def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res:float = 2, 
+                     symmetry = True, viewing = False, normalize = True):
     ''' Design the target magnetic field. '''
     pts = int(np.ceil(dsv / res))
     Bz_max = grad_max * dsv * 0.5
@@ -50,6 +56,9 @@ def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res
     Y = Y.flatten()
     Z = Z.flatten()
     Bz = Bz.flatten()
+    
+    if normalize is True:
+        Bz = 100 * Bz / np.max(Bz)  # This should put the range from -100 to 100
 
      
     if viewing is True:
@@ -109,7 +118,7 @@ def get_surface_current_density_triangle(triangle, nodes, psi, p=2, debug = Fals
     surface_current_density = ei * (psi) / (2 * area)
     return surface_current_density, area
 
-def make_wire_patterns_contours(triangles, nodes, psi, current, 
+def make_wire_patterns_contours(nodes, psi, levels, current, grad_dir = 'x',
                                 wire_width = 1.4e-3, wire_gap = 0.7e-3, 
                                 viewing = False):
     planar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
@@ -118,7 +127,8 @@ def make_wire_patterns_contours(triangles, nodes, psi, current,
     y = nodes[:, 1]
     z = nodes[:, 2]
     wire_patterns = []
-    contours = psi2contour(x, y, psi, viewing = viewing )
+    contours = psi2contour(x, y, psi, levels_values = levels, grad_dir = grad_dir, viewing = viewing )
+    wire_smoothness = 0
     
     for collection, level  in zip(contours.collections, contours.levels):
         paths = collection.get_paths()
@@ -126,29 +136,37 @@ def make_wire_patterns_contours(triangles, nodes, psi, current,
         current_direction = np.sign(level)
         for path in paths:
             vertices = path.vertices
-            # append the last coordinate to close the loop
-            loop_vertices = np.vstack((vertices, vertices[0, :]))
-            loop_vertices_current_intensity = np.array([loop_vertices[:, 0], loop_vertices[:, 1], z[0] * np.ones(loop_vertices[:, 0].shape)]).T
-            loop_vertices_wire_widths = gen_wire_vertices(loop_vertices_current_intensity, level, wire_width, wire_gap)
+        
+            # if  is_closed(vertices) is False:
+            #     vertices = np.vstack((vertices, vertices[0, :]))
+            loop_vertices_wire_widths = np.array([vertices[:, 0], vertices[:, 1], z[0] * np.ones(vertices[:, 0].shape)]).T
+        
             # store all loops in a variable
-            wire_patterns.append(loop_vertices_wire_widths)
+            # wire_patterns.append(loop_vertices_wire_widths)
+            
+            # increase wire thickness based on level
+            # loop_vertices_wire_widths = gen_wire_vertices(loop_vertices_wire_widths, level, wire_width, wire_gap)
             
             # Check for all loops in wire_patterns if the current loop is overalapping with any coordinates of previous loops, if so exclude it
             overlap = False
-            loop1 = list(loop_vertices_wire_widths[:, :2])
-            for previous_pattern in wire_patterns[:-1]:
-                loop2 = list(previous_pattern[:, :2])
-                if check_intersection(loop1, loop2):
-                    overlap = True
-                    break
-                
-            if overlap is False:
-                planar_coil_pattern.add(magpy.current.Polyline(current=current * current_direction, 
-                                                           vertices = loop_vertices_wire_widths))
-            
+            # loop1 = list(loop_vertices_wire_widths[:, :2])
+            # for previous_pattern in wire_patterns[:-1]:
+            #     loop2 = list(previous_pattern[:, :2])
+            #     if check_intersection(loop1, loop2):
+            #         overlap = True
+            #         break
 
-            
-    return planar_coil_pattern
+            if overlap is False:
+                gradient_x = np.gradient(loop_vertices_wire_widths[:, 0])
+                gradient_y = np.gradient(loop_vertices_wire_widths[:, 1])
+                
+                wire_smoothness += np.linalg.norm(np.sqrt(gradient_x**2 + gradient_y**2))
+                planar_coil_pattern.add(magpy.current.Polyline(current=current * current_direction, 
+                                                        vertices = loop_vertices_wire_widths))  
+        # else:
+        #     print(Fore.RED + 'Path is not closed' + Style.RESET_ALL)
+    
+    return planar_coil_pattern, wire_smoothness
 
 
 
@@ -277,12 +295,16 @@ def plot_wire_patterns(wire_patterns):
         plt.show()
     pass
 
-def get_magnetic_field(magnets, sensors, axis = None):
+def get_magnetic_field(magnets, sensors, axis = None, normalize = True):
     B = sensors.getB(magnets)
     if axis is None:
         B_eff = np.linalg.norm(B, axis=2) # interested only in Bz for now; concomitant fields later
     else:
         B_eff = np.squeeze(B[:, axis]) 
+        
+    if normalize is True:
+        B_eff = 100 * B_eff / np.max(B_eff) # This should put the range from -100 to 100
+    
     return B_eff
 
 def get_surface_current_density(triangles, nodes, psi,p=2):
@@ -301,30 +323,30 @@ def get_surface_current_density(triangles, nodes, psi,p=2):
                 triangles_used.append(triangles[i, :])
     return triangles_used, triangle_ji, triangle_area
 
-def cost_fn(psi, B_grad, B_target, coil_resistance, coil_current, case = 'target_field',
+def cost_fn(B_grad, B_target,  psi_smoothness, wire_smoothness,
+            case = 'target_field', coil_resistance=0, coil_current=0,
             p=2,  alpha = [0.1], beta = 0.1, weight = 1):
     ''' Compute the cost function for the optimization problem. '''
-    gammabar = 42.58e6
+
     if case == 'target_field':
         # print(Fore.GREEN + ' max B_grad: ', np.max(B_grad), Style.RESET_ALL)
-        f0 = np.linalg.norm(100 * np.divide((B_grad - B_target), B_target), ord=p) * weight # target field method
-        f1 = np.linalg.norm(B_grad - B_target, ord=np.inf) # avoiding spikes
-        f2 = coil_resistance # minimizing resistance
-        f3 = coil_current # minimizing peak current
-        
+        f0 = 100 * np.linalg.norm(B_grad - B_target, ord=np.inf) / (np.linalg.norm(B_target, ord=np.inf)) # minimizing peak field
+        f1 = wire_smoothness # 100 * np.linalg.norm(np.divide((B_grad - B_target), B_target), ord=p) * weight # target field method
         # avoiding overlaps in the wire patterns by enforcing a smooth transition
-        N_plate = int(psi.shape[0] * 0.5)
-        f4 = np.linalg.norm(np.diff(psi[0:N_plate]), ord=p) + np.linalg.norm(np.diff(psi[N_plate:]), ord=p)
-     
+        # N_plate = int(psi.shape[0] * 0.5)
+        f2 = np.abs(psi_smoothness)
+        f3 = coil_resistance # minimizing resistance
+        f4 = coil_current # minimizing peak current
+        
         if alpha.shape[0] > 1:
             f = (alpha[0] * f0) + (alpha[1] * f1) + (alpha[2] * f2) + (alpha[3] * f3) 
             + (alpha[4] * f4)
+
+            # print(Fore.YELLOW + 'f0: ', alpha[0] * f0, 'f1: ', alpha[1] * f1, 'f2: ', alpha[2] * f2, 'f3: ', alpha[3] * f3, 'f4: ', alpha[4] * f4, Style.RESET_ALL)
         else:
             f = [f0, f1, f2, f3, f4]
+            # print(f0, f1, f2)
             
-
-            
-        
     elif case == 'vector_BEM':
         f1 = alpha * coil_resistance
         f2 = beta *  (1 - alpha) * coil_current 
@@ -337,6 +359,8 @@ def cost_fn(psi, B_grad, B_target, coil_resistance, coil_current, case = 'target
     elif case == 'J_BEM': 
         f = beta *  (1 - alpha) * coil_current 
     
+    f = np.array(f)
+    f[np.isnan(f)] = np.inf
     return f
 
 def compute_constraints(B_grad, B_target, B_tol, current, wire_thickness, J_max, gammabar = 42.58e6):
@@ -352,10 +376,13 @@ def compute_constraints(B_grad, B_target, B_tol, current, wire_thickness, J_max,
          return g1, g2
               
 
-def prepare_vars(num_triangles, types = ['Real'], options = [[0]]):
+def prepare_vars(num_psi, types = ['Real'],  num_levels =10, options = [[0]]):
     vars = dict()
-    for var in range(num_triangles):
-        vars[f"x{var:02}"] = Real(bounds=(options[0], options[1]))
+    if types[0] == 'Real':
+        for var in range(num_psi):
+            vars[f"x{var:02}"] = Real(bounds=(options[0], options[1]))
+        # for var in range(num_psi, num_psi + num_levels):
+        #     vars[f"x{var:02}"] = Real(bounds=(options[2], options[3]))
     return vars
 
 
@@ -402,21 +429,39 @@ def create_magpy_sensors(grad_dir, grad_max, dsv, res, viewing, symmetry):
     
     return dsv_sensors, pos, Bz_target
 
-def psi2contour(x, y, psi, levels = 18, viewing = True):
+def psi2contour(x, y, psi, grad_dir = 'x', levels_values = np.linspace(-1, 1, 10), viewing = False):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')  
-    contours = ax.tricontour(x, y, psi, levels=levels, cmap='jet')
+
+    # Need to shape the stream function to expedite convergence
+    if grad_dir == 'x':
+        weights = (np.sin(np.pi * (x)/np.max(np.abs(x))))
+        # psi = (psi) * np.sign(x) * weights
+        psi = (psi) *  weights
+    elif grad_dir == 'y':
+        weights = (np.sin(np.pi * (y)/np.max(np.abs(y))))
+        psi = (psi) *  weights
+        
+    xi = np.linspace(min(x), max(x), 100) # Hardocded but good enough for now
+    yi = np.linspace(min(y), max(y), 100)
+    psi_2D = griddata((x, y), psi, (xi[None,:], yi[:,None]), method='cubic')
+    X, Y = np.meshgrid(xi, yi)
+    # levels_values_sorted = np.unique(np.round(np.sort(levels_values), decimals=1))
+    levels_values_sorted = np.sort(levels_values)
+    contours = ax.contour(X, Y, psi_2D, levels = levels_values_sorted , cmap='jet')
+    
+    
     plt.close()
     # viewing = True
     if viewing is True:
        fig = plt.figure()
        ax = fig.add_subplot(111, projection='3d')
-       ax.plot_trisurf(x, y, psi, cmap='jet')
+       ax.plot_surface(X, Y, psi_2D, cmap='jet')
        plt.show()
        
        fig = plt.figure()
        ax = fig.add_subplot(111, projection='3d')  
-       ax.tricontour(x, y, psi, levels=levels, cmap='jet')
+       ax.contour(X, Y, psi_2D, levels = np.sort(levels_values),cmap='jet')
        plt.show()
     
     return  contours
@@ -522,3 +567,152 @@ def on_segment(p, q, r):
 
     return (q[0] <= max(p[0], r[0]) and q[0] >= min(p[0], r[0]) and
             q[1] <= max(p[1], r[1]) and q[1] >= min(p[1], r[1]))
+    
+def get_psi_smoothness(nodes, psi):
+    ''' Compute the smoothness of the stream function. '''
+    
+    x = nodes[:, 0]
+    y = nodes[:, 1]
+    
+    r = np.sqrt(x**2 + y**2)
+    
+    d_psi_r = np.gradient(psi, r)
+    d_psi_r = np.nan_to_num(d_psi_r, nan=0, posinf=0, neginf=0)
+    
+    # psi_smoothness = np.linalg.norm(d_psi_dx, ord=1) + np.linalg.norm(d_psi_dy, ord=1)  #TV like norm
+    psi_smoothness = np.linalg.norm(d_psi_r, ord=1) #TV like norm
+    
+    return psi_smoothness
+
+
+def fit_ellipse_contour(vertices, oversampling = 2):
+    ''' Fit an ellipse to the given vertices and extract N vertices of the fitted ellipse. '''
+    N = vertices.shape[0] * oversampling
+    
+
+    # Convert vertices to a format suitable for OpenCV
+    vertices = np.array(vertices, dtype=np.float32)
+    vertices = vertices.reshape(-1, 1, 2)
+
+    # Fit an ellipse to the vertices
+    ellipse = cv2.fitEllipse(vertices)
+
+    # Extract parameters of the fitted ellipse
+    center, axes, angle = ellipse
+    a, b = axes[0] / 2, axes[1] / 2  # semi-major and semi-minor axes
+
+    # Generate N vertices of the fitted ellipse
+    theta = np.linspace(0, 2 * np.pi, N)
+    ellipse_vertices = np.zeros((N, 2))
+
+    for i in range(N):
+        x = a * np.cos(theta[i])
+        y = b * np.sin(theta[i])
+
+        # Rotate the point by the ellipse angle
+        x_rot = x * np.cos(np.radians(angle)) - y * np.sin(np.radians(angle))
+        y_rot = x * np.sin(np.radians(angle)) + y * np.cos(np.radians(angle))
+
+        # Translate the point to the ellipse center
+        ellipse_vertices[i, 0] = x_rot + center[0]
+        ellipse_vertices[i, 1] = y_rot + center[1]
+      
+
+    return ellipse_vertices
+  
+
+
+def is_polygon(vertices):
+    try:
+        Polygon(vertices)
+        return True
+    except ValueError:
+        return False
+
+def is_closed(vertices):
+    dist =  np.sum(vertices[0] - vertices[-1])
+    if dist < 1e-3:
+        return True
+    else:
+        return False
+    
+def get_stream_function(grad_dir ='x', x =None, y=None, viewing = False):
+    if grad_dir == 'x':
+        X, Y = np.meshgrid(x, y)
+        stream_function = (np.sin(np.pi * (X)/np.max(np.abs(X))))
+       
+    elif grad_dir == 'y':
+        X, Y = np.meshgrid(x, y)
+        stream_function = (np.sin(np.pi * (Y)/np.max(np.abs(Y))))
+       
+       
+    if viewing is True:
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot_surface(X, Y, stream_function, cmap='jet')
+        plt.xlabel('X (mm)')
+        plt.ylabel('Y (mm)')
+        plt.show()
+    return stream_function
+
+def get_wire_patterns_contour_rect(psi, levels, stream_function, x, y, z, current = 1):
+    planar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
+    wire_smoothness = 0
+    contours = psi2contour_rect(x, y, psi, stream_function, levels = levels, viewing = False)
+
+    for collection, level  in zip(contours.collections, contours.levels):
+        paths = collection.get_paths()
+        current_direction = np.sign(level)
+        for path in paths:
+            vertices = path.vertices
+            loop_vertices_wire_widths = np.array([vertices[:, 0], vertices[:, 1], z * np.ones(vertices[:, 0].shape)]).T
+            gradient_x = np.gradient(loop_vertices_wire_widths[:, 0])
+            gradient_y = np.gradient(loop_vertices_wire_widths[:, 1])
+                
+            wire_smoothness += np.linalg.norm(np.sqrt(gradient_x**2 + gradient_y**2))
+            planar_coil_pattern.add(magpy.current.Polyline(current=current * current_direction, 
+                                                        vertices = loop_vertices_wire_widths)) 
+    return planar_coil_pattern, wire_smoothness
+
+
+def psi2contour_rect(x, y, psi, stream_function, levels, viewing = False):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')  
+
+    # Need to shape the stream function to expedite convergence
+    psi_weighted = psi * stream_function.T # TODO - figure out 
+    X, Y = np.meshgrid(x, y)
+    
+    if x.shape[0] < 100:
+        xi = np.linspace(min(x), max(x), 100)
+        yi = np.linspace(min(y), max(y), 100)
+        f = RegularGridInterpolator((x, y), psi_weighted, method='cubic')
+        X, Y = np.meshgrid(xi, yi)
+        psi_weighted_rsz = f((X, Y))
+    else:
+        psi_weighted_rsz = psi_weighted
+        
+    
+    levels_values = np.linspace(-1, 1, int(levels)) # if we want to only determine psi and not both
+
+    
+    contours = ax.contour(X, Y, psi_weighted_rsz, levels = levels_values , cmap='jet')
+    plt.close()
+    # viewing = True
+    
+    if viewing is True:
+       fig = plt.figure()
+       ax = fig.add_subplot(111, projection='3d')
+       ax.plot_surface(X, Y, psi_weighted_rsz, cmap='jet')
+       plt.xlabel('X (mm)')
+       plt.ylabel('Y (mm)')
+       plt.show()
+       
+       fig = plt.figure()
+       ax = fig.add_subplot(111, projection='3d')  
+       ax.contour(X, Y, psi_weighted_rsz, levels = np.sort(levels_values),cmap='jet')
+       plt.xlabel('X (mm)')
+       plt.ylabel('Y (mm)')
+       plt.show()
+    
+    return  contours
