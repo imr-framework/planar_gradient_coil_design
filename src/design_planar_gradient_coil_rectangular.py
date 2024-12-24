@@ -23,7 +23,7 @@ import time
 # --------------------------------------------------------------
 # Setup geometry for a planar gradient coil
 grad_dir = 'x'
-radius =  0.5 * 6 * 0.0254 # m
+radius =  0.5 * 5 * 0.0254 # m
 current = 1 # A
 res_design = 2 * 1e-3 # m
 mesh = 5 # 2 * int(radius / res_design) # number of points in the mesh 
@@ -31,7 +31,7 @@ target_field = 1 # get_field() # T
 wire_thickness = 1.3 * 1e-3 # m
 wire_spacing = 2 * wire_thickness # m
 viewing  = True
-heights = [-40 * 1e-3, 40 * 1e-3]  # m
+heights = [-36 * 1e-3, 36 * 1e-3]  # m
 symmetry = False
 psi_weights = mesh ** 2
 # Make an instance of the planar gradient coil class
@@ -46,7 +46,7 @@ dsv = 31 * 1e-3 # m
 res = 4 * 1e-3 # m
 viewing = True
 dsv_sensors, pos, Bz_target = create_magpy_sensors(grad_dir=grad_dir, grad_max=grad_max, dsv=dsv, res=res, viewing=viewing, symmetry=symmetry)
-linearity_percentage = 80 # 5% linearity
+linearity_percentage = 10 # 5% linearity
 #---------------------------------------------------------------
 # Optimize coil design 
 # Set up the optimization algorithm

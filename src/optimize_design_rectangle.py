@@ -34,7 +34,7 @@ class gradient_problem(ElementwiseProblem):
         self.num_levels = num_levels * 2 # for two plates
     
         self.x = prepare_vars(num_psi = self.num_psi_weights, types = ['Real'], num_levels=self.num_levels,
-                              options = [-1, 1, -1, 1])
+                              options = [0, 1, -1, 1])
         self.n_obj = n_obj
         self.num_constr = n_constr
         self.linearity_percentage = linearity_percentage
