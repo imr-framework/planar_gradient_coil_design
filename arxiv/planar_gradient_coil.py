@@ -12,6 +12,7 @@ class PlanarGradientCoil:
     ''' This class describes the geometry and properties of a planar gradient coil. '''
     
     def __init__(self, grad_dir, radius,  mesh, target_field, heights, current =10,
+                 num_levels = 10,
                  wire_thickness=0.1, wire_spacing=0.1, resistivity=1.68e-8, symmetry=True):
         ''' Initialize the planar gradient coil. '''
         self.grad_dir = grad_dir
@@ -28,12 +29,10 @@ class PlanarGradientCoil:
         self.upper_coil_plate_height = heights[0]
         self.lower_coil_plate_height = heights[1]
         self.symmetry = symmetry
+        self.num_levels = num_levels
         self.make_coil_plates()
     
 
-        
-        
-    
     def get_triangles(self, viewing=False):
         ''' Get triangles from the mesh of a particular circular region. '''
         
@@ -134,12 +133,17 @@ class PlanarGradientCoil:
           
         pass
     
-    def load(self, vars, num_nodes, num_levels,pos, sensors, viewing=False):
+    def load(self, vars, num_nodes, num_levels,pos, sensors, opt_tool = 'ga', viewing=False):
         ''' Load the planar gradient coil. '''
         biplanar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
-      
-        psi = np.array([vars[f"x{child:02}"] for child in range(0, num_nodes)]) # all children should have same magnet positions to begin with
-        levels = np.array([vars[f"x{child:02}"] for child in range(num_nodes, num_nodes + num_levels)])
+        
+        if opt_tool == 'ga':
+            psi = np.array([vars[f"x{child:02}"] for child in range(0, num_nodes)]) # all children should have same magnet positions to begin with
+            levels = np.array([vars[f"x{child:02}"] for child in range(num_nodes, num_nodes + num_levels)])
+            
+        elif opt_tool == 'cvx':
+            psi = np.array([vars[f"x{child:02}"] for child in range(0, num_nodes)]) 
+            levels = self.num_levels
         
         # compute current densities for all triangles
         N_psi_each_plate = int(len(psi) * 0.5)

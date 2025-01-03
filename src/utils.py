@@ -13,7 +13,7 @@ from shapely.geometry import LineString
 
 # Design the target magnetic field - Bz
 def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res:float = 2, 
-                     symmetry = True, viewing = False, normalize = True):
+                     symmetry = True, viewing = False, normalize = False):
     ''' Design the target magnetic field. '''
     pts = int(np.ceil(dsv / res))
     Bz_max = grad_max * dsv * 0.5
@@ -231,9 +231,7 @@ def visualize_gradient_coil(biplanar_coil_pattern, save = False, fname_save='coi
     ax = plt.figure().add_subplot(111, projection='3d')
     if save is True:
         vertices_write = []
-    if (len(biplanar_coil_pattern)) > 1: # expects two plates
-
-            
+    if (len(biplanar_coil_pattern)) < 3: # expects two plates
         for plate in range(len(biplanar_coil_pattern)): 
             for wire in range(len(biplanar_coil_pattern.children[plate].children)):
                 wire_pattern = biplanar_coil_pattern.children[plate].children[wire]
@@ -241,18 +239,30 @@ def visualize_gradient_coil(biplanar_coil_pattern, save = False, fname_save='coi
                     color = 'r'
                 else:
                     color = 'b'
-                
                 vertices = np.array(wire_pattern.vertices)
                 if save is True:
                     if wire_pattern.current > 0:
                         vertices_write.append(np.hstack((np.ones((vertices.shape[0], 1)), 1e3 * vertices)))
                     else:
                         vertices_write.append(np.hstack((-1 * np.ones((vertices.shape[0], 1)),1e3 * vertices)))
+                ax.plot(vertices[:, 0], vertices[:, 1], vertices[:, 2], color=color)  
+                 
+    else:       
+        for wire in range(len(biplanar_coil_pattern.children)):
+            wire_pattern = biplanar_coil_pattern.children[wire]
+            if wire_pattern.current > 0:
+                color = 'r'
+            else:
+                color = 'b'
+            vertices = np.array(wire_pattern.vertices)
+            if save is True:
+                if wire_pattern.current > 0:
+                    vertices_write.append(np.hstack((np.ones((vertices.shape[0], 1)), 1e3 * vertices)))
+                else:
+                    vertices_write.append(np.hstack((-1 * np.ones((vertices.shape[0], 1)),1e3 * vertices)))     
                     
-                        
-                        
-                        
-                ax.plot(vertices[:, 0], vertices[:, 1], vertices[:, 2], color=color)
+                    
+            ax.plot(vertices[:, 0], vertices[:, 1], vertices[:, 2], color=color)
         if save is True:
             np.savetxt(fname_save, np.vstack(vertices_write), delimiter=',')
         plt.xlabel('X (m)')
@@ -294,7 +304,7 @@ def plot_wire_patterns(wire_patterns):
         plt.show()
     pass
 
-def get_magnetic_field(magnets, sensors, axis = None, normalize = True):
+def get_magnetic_field(magnets, sensors, axis = None, normalize = False):
     B = sensors.getB(magnets)
     if axis is None:
         B_eff = np.linalg.norm(B, axis=2) # interested only in Bz for now; concomitant fields later
@@ -302,7 +312,7 @@ def get_magnetic_field(magnets, sensors, axis = None, normalize = True):
         B_eff = np.squeeze(B[:, axis]) 
         
     if normalize is True:
-        B_eff = 100 * B_eff / np.max(B_eff) # This should put the range from -100 to 100
+        B_eff = 100 * B_eff / np.max(np.abs(B_eff)) # This should put the range from -100 to 100
     
     return B_eff
 
@@ -334,13 +344,13 @@ def cost_fn(B_grad, B_target,  psi_smoothness, wire_smoothness,
         # avoiding overlaps in the wire patterns by enforcing a smooth transition
         # N_plate = int(psi.shape[0] * 0.5)
         f2 = np.abs(psi_smoothness)
-        f3 = coil_resistance # minimizing resistance
-        f4 = coil_current # minimizing peak current
+        f3 = np.abs(np.max(B_grad) + np.min(B_grad)) # minimizing peak field
+        f4 = coil_resistance # minimizing resistance
+        f5 = coil_current # minimizing peak current
         
         if alpha.shape[0] > 1:
             f = (alpha[0] * f0) + (alpha[1] * f1) + (alpha[2] * f2) + (alpha[3] * f3) 
-            + (alpha[4] * f4)
-
+            + (alpha[4] * f4) + (alpha[5] * f5)
             # print(Fore.YELLOW + 'f0: ', alpha[0] * f0, 'f1: ', alpha[1] * f1, 'f2: ', alpha[2] * f2, 'f3: ', alpha[3] * f3, 'f4: ', alpha[4] * f4, Style.RESET_ALL)
         else:
             f = [f0, f1, f2, f3, f4]
@@ -375,13 +385,15 @@ def compute_constraints(B_grad, B_target, B_tol, current, wire_thickness, J_max,
          return g1, g2
               
 
-def prepare_vars(num_psi, types = ['Real'],  num_levels =10, options = [[0]]):
+def prepare_vars(num_psi, types = ['Real', 'Integer'],  num_levels =10, options = [[0]]):
     vars = dict()
-    if types[0] == 'Real':
-        for var in range(num_psi):
-            vars[f"x{var:02}"] = Real(bounds=(options[0], options[1]))
-        # for var in range(num_psi, num_psi + num_levels):
-        #     vars[f"x{var:02}"] = Real(bounds=(options[2], options[3]))
+    for num_var in range(len(types)):
+        if types[num_var] == 'Real':
+            for var in range(num_psi):
+                vars[f"x{var:02}"] = Real(bounds=(options[0], options[1]))
+        elif types[num_var] == 'Integer':
+            for var in range(num_psi, num_psi + 1):
+                vars[f"x{var:02}"] = Integer(bounds=(options[2], options[3]))
     return vars
 
 
@@ -567,7 +579,6 @@ def get_stream_function(grad_dir ='x', x =None, y=None, viewing = False):
         X, Y = np.meshgrid(x, y)
         stream_function = (np.sin(np.pi * (Y)/np.max(np.abs(Y))))
        
-       
     if viewing is True:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -587,18 +598,23 @@ def get_wire_patterns_contour_rect(psi, levels, stream_function, x, y, z, curren
         current_direction = np.sign(level)
         for path in paths:
             vertices = path.vertices
-            intersect = check_intersection(vertices, vertices_all)
-            if intersect is False:
-                if len(vertices_all) ==0:
-                    vertices_all = vertices
-                else:
-                    vertices_all = np.vstack((vertices_all, vertices))
-                    loop_vertices_wire_widths = np.array([vertices[:, 0], vertices[:, 1], z * np.ones(vertices[:, 0].shape)]).T
-                    gradient_x = np.gradient(loop_vertices_wire_widths[:, 0])
-                    gradient_y = np.gradient(loop_vertices_wire_widths[:, 1])
-                    wire_smoothness += np.linalg.norm(np.sqrt(gradient_x**2 + gradient_y**2))
-                    planar_coil_pattern.add(magpy.current.Polyline(current=current * current_direction, 
-                                                            vertices = loop_vertices_wire_widths))
+            loops_vertices = identify_loops(vertices, loop_tolerance = 5e-3)  # m at this stage
+            
+            for vertices in loops_vertices:
+                # Check if the loop intersects with any of the previous loops
+                intersect = check_intersection(vertices, vertices_all)
+                if intersect is False:
+                    if len(vertices_all) ==0:
+                        vertices_all = vertices
+                    else:
+                        vertices_all = np.vstack((vertices_all, vertices))
+                        
+                        loop_vertices_wire_widths = np.array([vertices[:, 0], vertices[:, 1], z * np.ones(vertices[:, 0].shape)]).T
+                        gradient_x = np.gradient(loop_vertices_wire_widths[:, 0])
+                        gradient_y = np.gradient(loop_vertices_wire_widths[:, 1])
+                        wire_smoothness += np.linalg.norm(np.sqrt(gradient_x**2 + gradient_y**2))
+                        planar_coil_pattern.add(magpy.current.Polyline(current=current * current_direction, 
+                                                                vertices = loop_vertices_wire_widths))
             # plt.plot(vertices_all[:, 0], vertices_all[:, 1], 'ro')
             # plt.show()
             
@@ -669,8 +685,32 @@ def identify_loops(vertices, loop_tolerance = 5):
         loop_starts = np.append(loop_starts, len(x))
         for i in range(len(loop_starts) - 1):
             vertices_collated.append(vertices[loop_starts[i]:loop_starts[i + 1], :])
-        
+    
     return vertices_collated
     
     
+def combine_loops(loops, viewing = True):
+    ''' Combine the loops to form a single loop. '''
+    combined_loop = loops[0]
+    for i in range(1, len(loops)):
+        last_point = combined_loop[-1]
+        distances = [np.linalg.norm(last_point - loop[0]) for loop in loops]
+        closest_loop_idx = np.argmin(distances)
+        closest_loop = loops.pop(closest_loop_idx)
+        
+        # Smooth transition
+        transition = np.linspace(last_point, closest_loop[0], num=10)
+        combined_loop = np.vstack((combined_loop, transition, closest_loop))
     
+    if viewing:
+        plt.figure()
+        plt.plot(combined_loop[:, 0], combined_loop[:, 1], 'k-')
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Combined Loop')
+        plt.show()
+    
+    return combined_loop
+
+            
+                

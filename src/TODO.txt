@@ -1,0 +1,5 @@
+TODO
+1. Generate a wire from the psi for the top and bottom plates
+2. Exploit symmetry again!
+3. Coil performance metrics and inclusion in objectives
+3. 

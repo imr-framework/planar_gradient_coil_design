@@ -33,8 +33,8 @@ class gradient_problem(ElementwiseProblem):
         self.num_psi_weights = self.grad_coil.psi_weights * 2 # for two plates
         self.num_levels = num_levels * 2 # for two plates
     
-        self.x = prepare_vars(num_psi = self.num_psi_weights, types = ['Real'], num_levels=self.num_levels,
-                              options = [0, 1, -1, 1])
+        self.x = prepare_vars(num_psi = self.num_psi_weights, types = ['Real', 'Integer'], num_levels=self.num_levels,
+                              options = [0, 1, 10, 25])
         self.n_obj = n_obj
         self.num_constr = n_constr
         self.linearity_percentage = linearity_percentage
@@ -63,8 +63,8 @@ class gradient_problem(ElementwiseProblem):
                         coil_resistance=self.coil_resistance, coil_current=self.coil_current, psi_smoothness=self.psi_smoothness, wire_smoothness=self.wire_smoothness,
                         p=self.order, alpha=self.alpha, beta=self.beta, weight=1e3, case='target_field')
         
-            
-            out["F"] = [f[1], f[2]]
+            # print(Fore.YELLOW + 'Constraint violation value: ' + str(np.round(f[0]- self.linearity_percentage, decimals=2)) + Style.RESET_ALL)
+            out["F"] = [f[1], f[2], f[3]]
             out["G"] = [f[0]- self.linearity_percentage]
         
         # print(Fore.YELLOW + 'Constraint violation value: ' + str(np.round(f[0]- self.linearity_percentage, decimals=2)) + Style.RESET_ALL)
