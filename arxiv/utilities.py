@@ -116,30 +116,19 @@ def get_stream_function(grad_dir ='x', x =None, y=None, viewing = False):
         Z_neg = gaussian_2d(X, Y, amplitude_neg, center_x_neg, center_y_neg, sigma_x, sigma_y)
 
 # Combine the surfaces
-        stream_function = Z_pos + Z_neg   
-
         
            
     elif grad_dir == 'y': # This is a useless case as x-grad rotated by 90 degrees is the same as y-grad
       print('This is a useless case as x-grad rotated by 90 degrees is the same as y-grad; please use x-gradient')
       return None
     
-    elif grad_dir == 'z': 
-        X, Y = np.meshgrid(x, y)
-        # Generate the Gaussian surfaces
-        center_x = 0
-        center_y = 0
-        sigma_x = 0.5 * np.max(x)
-        sigma_y = 0.5 * np.max(y)
-        stream_function = gaussian_2d(X, Y, amplitude_pos, center_x, center_y, sigma_x, sigma_y)
-    
+    stream_function = Z_pos + Z_neg   
     stream_function[0, :] = 0
     stream_function[-1, :] = 0
     stream_function[:, 0] = 0
     stream_function[:, -1] = 0
-    
-     
     # stream_function = np.pad(stream_function, pad_width=1, mode='constant', constant_values=0)[1:-1, 1:-1]  # ensuring that the function always ends at 0 
+    
     if viewing is True:
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')

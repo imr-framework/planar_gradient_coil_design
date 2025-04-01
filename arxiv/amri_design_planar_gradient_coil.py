@@ -14,12 +14,10 @@ from pymoo.core.population import Population
 from pymoo.core.evaluator import Evaluator
 import time 
 from datetime import datetime
-
-
 # -----------------------------------------------------------------------------
 # Generate target magnetization and linearity
 grad_max = 27 * 1e-3 # T/m --> 0.1 B0 * 1e-2 
-grad_dir = 'z'
+grad_dir = 'x'
 dsv = 31 * 1e-3 # m
 res = 4 * 1e-3 # m
 symmetry = False
@@ -42,14 +40,14 @@ heights = [-36 * 1e-3, 36 * 1e-3]  # m
 symmetry = False    
 num_psi = mesh ** 2
 magnetization = 24 * 1e2 # A/m - need to calibrate this value - 3.7 Am-1 for AWG 16
-num_levels = 14    # Need to make this more adaptive to the value of psi
+num_levels = 12    # Need to make this more adaptive to the value of psi
 # Make an instance of the planar gradient coil class
 tenacity_grad_coil = PlanarGradientCoil(grad_dir = grad_dir, radius=radius, current = current, heights = heights, magnetization=magnetization, mesh=mesh, 
                                          thickness=thickness, spacing=spacing, symmetry = symmetry, levels=num_levels)
 
 # -----------------------------------------------------------------------------
 # Setup optimization problem including the preconditioner
-psi_init = get_stream_function(grad_dir=grad_dir, x =tenacity_grad_coil.x, 
+psi_init = get_stream_function(grad_dir='x', x =tenacity_grad_coil.x, 
                                     y=tenacity_grad_coil.y, viewing = True).T
 psi_0 = np.concatenate((psi_init.flatten(), psi_init.flatten()), axis=0)
 # pop = Population.new("vars", psi_0)
@@ -76,6 +74,7 @@ elif opt_tool == 'pymoo-ga':
     
     print(Fore.YELLOW + 'The population size is: ' + str(pop_size) + Style.RESET_ALL)
     algorithm = MixedVariableGA(pop_size=pop_size, survival=RankAndCrowdingSurvival())
+    # algorithm = NSGA2(pop_size=pop_size, survival=RankAndCrowdingSurvival())
     tic = time.time()
     res_psi = minimize(tenacity_gradient_optimize,
                     algorithm, ('n_gen', iterations),
@@ -92,7 +91,6 @@ if vars is None:
 # -----------------------------------------------------------------------------
 if type(vars) is np.ndarray: # has a list of solutions that we need to choose from
     # vars = vars[0] # for now choose the first solution
-    print(Fore.YELLOW + 'Identifying the best solution out of multiple solutions: ' + str(vars.shape[0]) + Style.RESET_ALL)
     F_min = np.min(res_psi.F[0])
     vars_chosen = vars[0]
     for sol in range(vars.shape[0]):

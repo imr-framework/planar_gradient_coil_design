@@ -28,7 +28,7 @@ class planar_gradient_problem(ElementwiseProblem):
         self.n_obj = n_obj
         self.num_constr = n_constr
         self.linearity_percentage = linearity_percentage
-        self.x = prepare_vars(num_psi = self.num_psi_weights, types = ['Real'], 
+        self.x = prepare_vars(num_psi = 2 * self.num_psi_weights, types = ['Real'], 
                               options = [-1, 1])
         super().__init__(vars=self.x, n_ieq_constr=self.num_constr, n_obj=self.n_obj, **kwargs)
        

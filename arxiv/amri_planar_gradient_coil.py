@@ -66,13 +66,10 @@ class PlanarGradientCoil:
     def load(self, vars, num_psi_weights, psi_init, viewing = False):
         biplanar_coil_pattern = magpy.Collection()
           
-        vars = np.array([vars[f"x{child:02}"] for child in range(0, num_psi_weights)]) # all children should have same magnet positions to begin with
+        vars = np.array([vars[f"x{child:02}"] for child in range(0, 2 * num_psi_weights)]) # all children should have same magnet positions to begin with
             
         psi_flatten_upper_plate = vars[:num_psi_weights]
-        if self.grad_dir == 'z':
-            psi_flatten_lower_plate = -1 * vars[:num_psi_weights]
-        else:
-            psi_flatten_lower_plate = vars[:num_psi_weights] # for x and y, the lower plate is the same as the upper plate but with negative magnetization for z direction
+        psi_flatten_lower_plate = vars[num_psi_weights:]
         
         psi_upper_plate = psi_flatten_upper_plate.reshape(self.mesh, self.mesh) * psi_init
         psi_lower_plate = psi_flatten_lower_plate.reshape(self.mesh, self.mesh) * psi_init
@@ -89,7 +86,6 @@ class PlanarGradientCoil:
         self.biplanar_coil_pattern = biplanar_coil_pattern
             
         return biplanar_coil_pattern
-    
     def load_plate(self, psi_plate, x, y, z):
         ''' Load the plate. '''
 
@@ -123,17 +119,13 @@ class PlanarGradientCoil:
     
         planar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
         wire_smoothness = 0
-        psi = np.array([vars[f"x{child:02}"] for child in range(0,  self.num_psi_weights)]) 
+        psi = np.array([vars[f"x{child:02}"] for child in range(0, 2 * self.num_psi_weights)]) 
         for z in heights:
             if z == heights[0]:
                 psi_plate = psi[:self.num_psi_weights]
                 spiral_plate_lower = []
             else:
-                if self.grad_dir == 'z':
-                    psi_plate = -1 * psi[:self.num_psi_weights]
-                    # for z direction, the lower plate is negative of the upper plate
-                else:
-                    psi_plate = psi[:self.num_psi_weights]
+                psi_plate = psi[self.num_psi_weights:]
                 spiral_plate_upper = []
             loop_stack = []    
             contours = psi2contour(x, y, psi_plate, stream_function, levels = levels, viewing = viewing) # viewing = viewing
@@ -144,7 +136,8 @@ class PlanarGradientCoil:
                 # current_direction = np.sign(level)
                 
                 current_direction = level
-
+                if z == heights[0]:
+                    current_direction = -current_direction
                     
                 for path in paths:
                     vertices = path.vertices 
