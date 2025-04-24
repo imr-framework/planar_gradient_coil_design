@@ -153,6 +153,7 @@ requests==2.32.3
 rpds-py==0.22.3
 scipy==1.14.1
 scs==3.2.7
+shapely==2.1.0
 six==1.17.0
 soupsieve==2.6
 stack-data==0.6.3
