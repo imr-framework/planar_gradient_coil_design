@@ -13,7 +13,7 @@ class planar_gradient_problem(ElementwiseProblem):
    
     def __init__(self, grad_coil, sensors, pos, target_field, psi, order=2, 
                  alpha=[0.5], B_tol = 5, num_levels = 10, linearity_percentage = 5, 
-                 n_obj=1, n_constr=0, **kwargs):
+                 n_obj=1, n_constr=0, symmetry= True, **kwargs):
         
         self.grad_coil = grad_coil
         self.sensors = sensors
@@ -28,8 +28,9 @@ class planar_gradient_problem(ElementwiseProblem):
         self.n_obj = n_obj
         self.num_constr = n_constr
         self.linearity_percentage = linearity_percentage
+        self.symmetry = symmetry
         self.x = prepare_vars(num_psi = self.num_psi_weights, types = ['Real'], 
-                              options = [-1, 1])
+                              options = [-1, 1]) # [-1, 1] 
         super().__init__(vars=self.x, n_ieq_constr=self.num_constr, n_obj=self.n_obj, **kwargs)
        
         
@@ -68,13 +69,12 @@ class planar_gradient_problem(ElementwiseProblem):
         
         f0 = 100 * np.linalg.norm(self.grad_coil_field - self.target_field, ord=np.inf) / (np.linalg.norm(self.target_field, ord=np.inf)) # minimizing peak field
         f1 = 100 * np.linalg.norm(self.grad_coil_field - self.target_field, ord=2) / (np.linalg.norm(self.target_field, ord=2)) # minimizing RMSE error
-        
         if (f0 - self.linearity_percentage) <= 0:
             self.biplanar_coil_pattern_wires, _, _, _ = self.grad_coil.get_wire_patterns(vars, levels = self.grad_coil.levels, stream_function = self.psi_init, 
                                         x = self.grad_coil.x, y = self.grad_coil.y, heights = self.grad_coil.heights, current = 1, viewing = False)
         
-            _, Lorentz_force_mag = self.grad_coil.get_Lorentz_force(self.biplanar_coil_pattern_wires, 
-                                                                                    self.biplanar_coil_pattern)
+            # _, Lorentz_force_mag = self.grad_coil.get_Lorentz_force(self.biplanar_coil_pattern_wires, 
+            Lorentz_force_mag = 0                                                                 # self.biplanar_coil_pattern)
         else:
             Lorentz_force_mag = np.inf
         

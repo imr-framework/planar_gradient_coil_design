@@ -20,7 +20,7 @@ class PlanarGradientCoil:
 # Initialize the planar gradient coil
 
     def __init__(self, grad_dir, radius,  mesh, heights, levels, current, magnetization = 8 * 1e5,
-                 thickness=0.1, spacing=0.1, resistivity=1.68e-8, symmetry=True):
+                 thickness=0.1, spacing=0.1, resistivity=1.68e-8, symmetry=True, shape='circle'):
         ''' Initialize the planar gradient coil. '''
         self.grad_dir = grad_dir
         self.radius = radius
@@ -39,6 +39,8 @@ class PlanarGradientCoil:
         self.biplanar_coil_pattern = None
         self.biplanar_coil_pattern_wires = None
         self.current = current
+        self.force_balance = True
+        self.shape = shape
         self.get_xy_coords()
         
         
@@ -48,9 +50,16 @@ class PlanarGradientCoil:
             
         
     def get_xy_coords(self):
-        a =  self.radius / np.sqrt(2)  # 4 * r**2  = 2 * (2a)**2;  a = r / sqrt(2) 
-        self.x = np.linspace(-a, a, self.mesh)
-        self.y = np.linspace(-a, a, self.mesh)
+        ''' Get the x and y coordinates of the coil. '''
+        if self.shape == 'circle':
+            self.x = np.linspace(-self.radius, self.radius, self.mesh)
+            self.y = np.linspace(-self.radius, self.radius, self.mesh)
+        elif self.shape == 'square':
+            a =  self.radius / np.sqrt(2)  # 4 * r**2  = 2 * (2a)**2;  a = r / sqrt(2) - square inside a circle
+            self.x = np.linspace(-a, a, self.mesh)
+            self.y = np.linspace(-a, a, self.mesh)
+        
+
         if self.symmetry is True:
             if self.grad_dir == 'x':
                 self.y = self.y[self.y >= 0]
@@ -67,7 +76,8 @@ class PlanarGradientCoil:
         biplanar_coil_pattern = magpy.Collection()
           
         vars = np.array([vars[f"x{child:02}"] for child in range(0, num_psi_weights)]) # all children should have same magnet positions to begin with
-            
+        
+
         psi_flatten_upper_plate = vars[:num_psi_weights]
         if self.grad_dir == 'z':
             psi_flatten_lower_plate = -1 * vars[:num_psi_weights]
@@ -76,6 +86,7 @@ class PlanarGradientCoil:
         
         psi_upper_plate = psi_flatten_upper_plate.reshape(self.mesh, self.mesh) * psi_init
         psi_lower_plate = psi_flatten_lower_plate.reshape(self.mesh, self.mesh) * psi_init
+        
         
         upper_plate = self.load_plate(psi_upper_plate, self.x, self.y, self.upper_coil_plate_height)
         lower_plate = self.load_plate(psi_lower_plate, self.x, self.y, self.lower_coil_plate_height)
@@ -98,7 +109,7 @@ class PlanarGradientCoil:
         x_grid, y_grid = np.meshgrid(x, y, indexing='ij')
         positions = np.column_stack((x_grid.ravel(), y_grid.ravel(), np.full(x_grid.size, z)))
         magnetizations = self.magnetization_fact * psi_plate.ravel()
-        valid_indices = np.abs(magnetizations) > 0.10 * self.magnetization_fact
+        valid_indices = np.abs(magnetizations) > 0.0 * self.magnetization_fact # threshold here!
         positions = positions[valid_indices]
         magnetizations = magnetizations[valid_indices]
 
@@ -124,6 +135,8 @@ class PlanarGradientCoil:
         planar_coil_pattern = magpy.Collection(style_label='coil', style_color='r')
         wire_smoothness = 0
         psi = np.array([vars[f"x{child:02}"] for child in range(0,  self.num_psi_weights)]) 
+        
+
         for z in heights:
             if z == heights[0]:
                 psi_plate = psi[:self.num_psi_weights]
@@ -137,15 +150,17 @@ class PlanarGradientCoil:
                 spiral_plate_upper = []
             loop_stack = []    
             contours = psi2contour(x, y, psi_plate, stream_function, levels = levels, viewing = viewing) # viewing = viewing
-            spiral = connect_contours_to_spiral(contours, gap_pts=10)
+                      
+            spiral = connect_contours_to_spiral(contours, gap_pts=30) # this is the number of points to remove from the contour and connect to the spiral
             
             for collection, level  in zip(contours.collections, contours.levels):
+                
                 paths = collection.get_paths()
                 # current_direction = np.sign(level)
                 
                 current_direction = level
-
-                    
+                
+                
                 for path in paths:
                     vertices = path.vertices 
                     loops_vertices = identify_loops(vertices, loop_tolerance = loop_tolerance)  # m at this stage
@@ -166,24 +181,31 @@ class PlanarGradientCoil:
                         if current_direction > 0:
                             planar_coil_pattern.add(magpy.current.Polyline(current = current * current_direction, 
                                                                 vertices = loop_vertices_wire_widths, style_color = 'red'))
+                            if self.grad_dir == 'x' and self.force_balance is True:
+                                loop_vertices_wire_widths_mirror = np.array([-loop_vertices_wire_widths[:, 0], loop_vertices_wire_widths[:, 1], z * np.ones(loop_vertices_wire_widths[:, 0].shape)]).T
+                                planar_coil_pattern.add(magpy.current.Polyline(current = -current * current_direction, 
+                                                                vertices = loop_vertices_wire_widths_mirror, style_color = 'blue'))
                         else:
-                            planar_coil_pattern.add(magpy.current.Polyline(current = current * current_direction, 
+                            if  self.force_balance is False:
+                                planar_coil_pattern.add(magpy.current.Polyline(current = current * current_direction, 
                                                                 vertices = loop_vertices_wire_widths, style_color = 'blue'))
             # plt.plot(vertices_all[:, 0], vertices_all[:, 1], 'ro')
             # plt.show()
-            
+            spiral_array = np.array(spiral)
+            if self.grad_dir == 'x' and self.force_balance is True:
+                spiral_array = spiral_symmetry(spiral_array)
                             
             if z == heights[0]:
-                spiral_plate_lower = np.array(spiral)
+                spiral_plate_lower = spiral_array
                 if viewing is True:
                     planar_coil_pattern.show()
-                    plt.plot(spiral_plate_lower[:, 0], spiral_plate_lower[:, 1], 'ro')
+                    plt.plot(spiral_plate_lower[:, 0], spiral_plate_lower[:, 1], 'r-')
                     plt.show()
             else:
-                spiral_plate_upper = np.array(spiral)
+                spiral_plate_upper = spiral_array
                 if viewing is True:
                     planar_coil_pattern.show()
-                    plt.plot(spiral_plate_upper[:, 0], spiral_plate_upper[:, 1], 'ro')
+                    plt.plot(spiral_plate_upper[:, 0], spiral_plate_upper[:, 1], 'r-')
                     plt.show()
                         
         self.biplanar_coil_pattern_wires = planar_coil_pattern
