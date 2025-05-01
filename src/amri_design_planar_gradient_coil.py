@@ -27,7 +27,7 @@ fname_csv_loops = 'optimized_coil_loops.csv'
 # Generate target magnetization and linearity
 grad_max = 27 * 1e-3 # T/m --> 0.1 B0 * 1e-2 
 grad_dir = 'x'
-dsv = 31 * 1e-3 # m
+dsv = 41 * 1e-3 # m
 res = 4 * 1e-3 # m
 symmetry = False
 viewing = True

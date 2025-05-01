@@ -33,7 +33,7 @@ def create_magpy_sensors(grad_dir, grad_max, dsv, res, viewing, symmetry):
     return dsv_sensors, pos, Bz_target
 
 def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res:float = 2, 
-                     symmetry = True, viewing = False, normalize = False):
+                     symmetry = True, viewing = False, normalize = True):
     ''' Design the target magnetic field. '''
     pts = int(np.ceil(dsv / res))
     Bz_max = grad_max * dsv * 0.5
@@ -77,7 +77,7 @@ def set_target_field(grad_dir:str ='x', grad_max:float = 27, dsv:float = 30, res
     Bz = Bz.flatten()
 
     if normalize is True:
-        Bz = 100 * Bz / np.max(Bz)  # This should put the range from -100 to 100
+        Bz =  Bz / np.max(Bz)  # This should put the range from -100 to 100
 
      
     if viewing is True:
@@ -202,7 +202,7 @@ def get_stream_function(grad_dir ='x', x =None, y=None, viewing = False, symmetr
 # ----------------------
 # Compute resulting magnetization 
 
-def get_magnetic_field(magnets, sensors, axis = None, normalize = False):
+def get_magnetic_field(magnets, sensors, axis = None, normalize = True):
     B = sensors.getB(magnets)
     if axis is None:
         B_eff = np.linalg.norm(B, axis=2) # interested only in Bz for now; concomitant fields later
@@ -212,7 +212,7 @@ def get_magnetic_field(magnets, sensors, axis = None, normalize = False):
 
     
     if normalize is True:
-        B_eff = 100 * B_eff / np.max(np.abs(B_eff)) # This should put the range from -100 to 100
+        B_eff =  B_eff / np.max(np.abs(B_eff)) # This should put the range from -100 to 100
     
     return B_eff
 
