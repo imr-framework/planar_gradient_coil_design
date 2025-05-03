@@ -10,7 +10,7 @@ import csv
 import os
 import warnings
 from mpl_toolkits import mplot3d 
-import numba
+
 # --------------------------------------------------------
 # Declare the class for the planar gradient coil
 
